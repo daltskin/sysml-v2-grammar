@@ -39,6 +39,22 @@ jobs:
       - name: Check for grammar drift
         run: make drift-check
 
+      - name: Read release tag
+        id: meta
+        run: |
+          TAG=$(jq -r '.release_tag' scripts/config.json)
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Upload grammar artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        with:
+          name: sysml-v2-grammar-${{ steps.meta.outputs.tag }}
+          path: |
+            grammar/SysMLv2.g4
+            grammar/SysMLv2Lexer.g4
+            grammar/SysMLv2Lexer.tokens
+          if-no-files-found: error
+
   validate:
     name: Validate with ANTLR4
     runs-on: ubuntu-latest
