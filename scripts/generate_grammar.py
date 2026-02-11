@@ -849,7 +849,7 @@ class Antlr4Transformer:
         grammar = grammar.replace(
             "calculationUsageDeclaration\n"
             "    : IDENTIFIER  /* TODO: stub for calculationUsageDeclaration */",
-            "calculationUsageDeclaration\n    : usageDeclaration valuePart?",
+            "calculationUsageDeclaration\n    : usageDeclaration? valuePart?",
         )
 
         # Fix 11: SLL mode ambiguity with qualifiedName | ownedFeatureChain.
@@ -949,6 +949,465 @@ class Antlr4Transformer:
             "    | ( flowEndSubsetting )? flowFeatureMember\n"
             "    ;",
             "flowEnd\n    : qualifiedName ( DOT qualifiedName )*\n    ;",
+        )
+
+        # ============================================================
+        # Extension compatibility patches (Fix 13–25)
+        #
+        # These patches align the generated grammar with the VS Code
+        # SysML extension's parser requirements. They handle:
+        # - Anonymous elements (optional identification)
+        # - Anonymous usages (optional usageDeclaration)
+        # - SLL prediction optimizations
+        # - Structural rule additions
+        # ============================================================
+
+        # Fix 13: Rewrite the identification rule.
+        # The generator produces '( LT name GT )? ( name )?' which can match
+        # the empty string. Rewrite to explicit alternatives that each require
+        # at least one component, matching KerML Identification semantics.
+        grammar = grammar.replace(
+            "identification\n"
+            "    : ( LT name GT )? ( name )?\n"
+            "    ;",
+            "identification\n"
+            "    : LT name GT name\n"
+            "    | LT name GT\n"
+            "    | name\n"
+            "    ;",
+        )
+
+        # Fix 14: Make identification optional in annotation-related rules.
+        # SysML allows anonymous comments, documentation, and representations.
+        grammar = grammar.replace(
+            ": ( COMMENT identification ( ABOUT",
+            ": ( COMMENT identification? ( ABOUT",
+        )
+        grammar = grammar.replace(
+            ": DOC identification ( LOCALE",
+            ": DOC identification? ( LOCALE",
+        )
+        grammar = grammar.replace(
+            ": ( REP identification )? LANGUAGE",
+            ": ( REP identification? )? LANGUAGE",
+        )
+
+        # Fix 15: rootNamespace should only match packageBodyElement*.
+        # The namespaceBodyElement* alternative is redundant since
+        # packageBodyElement encompasses all valid top-level elements.
+        grammar = grammar.replace(
+            "rootNamespace\n"
+            "    : namespaceBodyElement*\n"
+            "    | packageBodyElement*\n"
+            "    ;",
+            "rootNamespace\n"
+            "    : packageBodyElement*\n"
+            "    ;",
+        )
+
+        # Fix 16: Make identification optional in namespace/type/classifier
+        # declarations. SysML allows anonymous definitions everywhere.
+        grammar = grammar.replace(
+            "namespaceDeclaration\n    : NAMESPACE identification\n",
+            "namespaceDeclaration\n    : NAMESPACE identification?\n",
+        )
+        grammar = grammar.replace(
+            "typeDeclaration\n"
+            "    : ( ALL )? identification ( ownedMultiplicity )?",
+            "typeDeclaration\n"
+            "    : ( ALL )? identification? ( ownedMultiplicity )?",
+        )
+        grammar = grammar.replace(
+            "classifierDeclaration\n"
+            "    : ( ALL )? identification ( ownedMultiplicity )?",
+            "classifierDeclaration\n"
+            "    : ( ALL )? identification? ( ownedMultiplicity )?",
+        )
+
+        # Fix 17: Make identification optional in relationship declarations.
+        grammar = grammar.replace(
+            ": ( SPECIALIZATION identification )? SUBTYPE",
+            ": ( SPECIALIZATION identification? )? SUBTYPE",
+        )
+        grammar = grammar.replace(
+            ": ( CONJUGATION identification )? CONJUGATE",
+            ": ( CONJUGATION identification? )? CONJUGATE",
+        )
+        grammar = grammar.replace(
+            ": ( DISJOINING identification )? DISJOINT",
+            ": ( DISJOINING identification? )? DISJOINT",
+        )
+        grammar = grammar.replace(
+            ": ( SPECIALIZATION identification )? SUBCLASSIFIER",
+            ": ( SPECIALIZATION identification? )? SUBCLASSIFIER",
+        )
+        grammar = grammar.replace(
+            ": ( SPECIALIZATION identification )? TYPING",
+            ": ( SPECIALIZATION identification? )? TYPING",
+        )
+        grammar = grammar.replace(
+            ": ( SPECIALIZATION identification )? SUBSET",
+            ": ( SPECIALIZATION identification? )? SUBSET",
+        )
+        grammar = grammar.replace(
+            ": ( SPECIALIZATION identification )? REDEFINITION",
+            ": ( SPECIALIZATION identification? )? REDEFINITION",
+        )
+        grammar = grammar.replace(
+            ": FEATURING ( identification OF )?",
+            ": FEATURING ( identification? OF )?",
+        )
+
+        # Fix 18: Make identification optional in definition/package/multiplicity
+        # and other declaration rules.
+        grammar = grammar.replace(
+            "definitionDeclaration\n    : identification subclassificationPart?",
+            "definitionDeclaration\n    : identification? subclassificationPart?",
+        )
+        grammar = grammar.replace(
+            "packageDeclaration\n    : PACKAGE identification\n",
+            "packageDeclaration\n    : PACKAGE identification?\n",
+        )
+        grammar = grammar.replace(
+            "multiplicitySubset\n    : MULTIPLICITY identification subsets",
+            "multiplicitySubset\n    : MULTIPLICITY identification? subsets",
+        )
+        grammar = grammar.replace(
+            "multiplicityRange\n"
+            "    : MULTIPLICITY identification multiplicityBounds",
+            "multiplicityRange\n"
+            "    : MULTIPLICITY identification? multiplicityBounds",
+        )
+        grammar = grammar.replace(
+            "dependencyDeclaration\n"
+            "    : ( identification FROM )?",
+            "dependencyDeclaration\n"
+            "    : ( identification? FROM )?",
+        )
+        grammar = grammar.replace(
+            "metadataFeatureDeclaration\n"
+            "    : ( identification ( COLON | TYPED BY ) )?",
+            "metadataFeatureDeclaration\n"
+            "    : ( identification? ( COLON | TYPED BY ) )?",
+        )
+        grammar = grammar.replace(
+            "metadataUsageDeclaration\n"
+            "    : ( identification ( COLON | TYPED BY ) )?",
+            "metadataUsageDeclaration\n"
+            "    : ( identification? ( COLON | TYPED BY ) )?",
+        )
+
+        # Fix 19: Remove extra namespaceBodyElement alternative from packageBody.
+        # The extension uses only packageBodyElement* for package bodies.
+        grammar = grammar.replace(
+            "packageBody\n"
+            "    : SEMI\n"
+            "    | LBRACE ( namespaceBodyElement | elementFilterMember )* RBRACE\n"
+            "    | LBRACE packageBodyElement* RBRACE\n"
+            "    ;",
+            "packageBody\n"
+            "    : SEMI\n"
+            "    | LBRACE packageBodyElement* RBRACE\n"
+            "    ;",
+        )
+
+        # Fix 20: multiplicityPart restructuring.
+        # Make the ordering keywords combinable with ownedMultiplicity in a
+        # single branch, matching the extension's interpretation.
+        grammar = grammar.replace(
+            "multiplicityPart\n"
+            "    : ownedMultiplicity\n"
+            "    | ( ownedMultiplicity )? ( ORDERED ( NONUNIQUE )? | NONUNIQUE ( ORDERED )? )\n"
+            "    ;",
+            "multiplicityPart\n"
+            "    : ownedMultiplicity ( ORDERED ( NONUNIQUE )? | NONUNIQUE ( ORDERED )? )?\n"
+            "    | ( ORDERED ( NONUNIQUE )? | NONUNIQUE ( ORDERED )? )\n"
+            "    ;",
+        )
+
+        # Fix 21: resultExpressionMember simplification.
+        # The generator produces two alternatives where the second subsumes
+        # the first. Collapse to single optional-prefix alternative.
+        grammar = grammar.replace(
+            "resultExpressionMember\n"
+            "    : memberPrefix ownedExpression\n"
+            "    | memberPrefix? ownedExpression\n"
+            "    ;",
+            "resultExpressionMember\n"
+            "    : memberPrefix? ownedExpression\n"
+            "    ;",
+        )
+
+        # Fix 22: SLL baseExpression optimization.
+        # Merge featureReferenceExpression, metadataAccessExpression, and
+        # invocationExpression into a single alternative that avoids SLL
+        # prediction ambiguity on qualifiedName lookahead.
+        grammar = grammar.replace(
+            "    | featureReferenceExpression\n"
+            "    | metadataAccessExpression\n"
+            "    | invocationExpression\n",
+            "    | qualifiedName ( argumentList | DOT METADATA )?   "
+            "// merged featureRef/metadataAccess/invocation\n",
+        )
+
+        # Fix 23: Make usageDeclaration optional and add featureSpecializationPart.
+        # Anonymous usages are common in SysML (e.g., 'part :> Vehicle;').
+        grammar = grammar.replace(
+            "usage\n"
+            "    : usageDeclaration usageCompletion\n"
+            "    ;",
+            "usage\n"
+            "    : usageDeclaration? usageCompletion\n"
+            "    ;",
+        )
+        grammar = grammar.replace(
+            "usageDeclaration\n"
+            "    : identification featureSpecializationPart?\n"
+            "    ;",
+            "usageDeclaration\n"
+            "    : identification featureSpecializationPart?\n"
+            "    | featureSpecializationPart\n"
+            "    ;",
+        )
+
+        # Fix 24: Make usageDeclaration optional in ownedCrossFeature.
+        grammar = grammar.replace(
+            "ownedCrossFeature\n"
+            "    : basicFeaturePrefix featureDeclaration\n"
+            "    | basicUsagePrefix usageDeclaration\n"
+            "    ;",
+            "ownedCrossFeature\n"
+            "    : basicFeaturePrefix featureDeclaration\n"
+            "    | basicUsagePrefix usageDeclaration?\n"
+            "    ;",
+        )
+
+        # Fix 25: SLL definitionBodyItem factoring.
+        # Replace the 6-alternative definitionBodyItem with a factored version.
+        # After memberPrefix is consumed, the next token (ALIAS, VARIANT,
+        # keyword, or identifier) unambiguously selects the branch, reducing
+        # the SLL prediction DFA from 6 nullable-prefix alternatives to 3+4.
+        grammar = grammar.replace(
+            "definitionBodyItem\n"
+            "    : definitionMember\n"
+            "    | variantUsageMember\n"
+            "    | nonOccurrenceUsageMember\n"
+            "    | ( sourceSuccessionMember )? occurrenceUsageMember\n"
+            "    | aliasMember\n"
+            "    | importRule\n"
+            "    ;",
+            "definitionBodyItem\n"
+            "    : importRule\n"
+            "    | memberPrefix definitionBodyItemContent\n"
+            "    | ( sourceSuccessionMember )? memberPrefix occurrenceUsageElement\n"
+            "    ;\n"
+            "\n"
+            "// Factored dispatch: after memberPrefix is consumed, the next token\n"
+            "// (ALIAS, VARIANT, keyword, or identifier) unambiguously selects the branch.\n"
+            "// This reduces the SLL prediction DFA from 6 nullable-prefix alternatives to 3+4.\n"
+            "definitionBodyItemContent\n"
+            "    : ALIAS ( LT name GT )? ( name )? FOR qualifiedName relationshipBody\n"
+            "    | VARIANT variantUsageElement\n"
+            "    | definitionElement\n"
+            "    | nonOccurrenceUsageElement\n"
+            "    ;",
+        )
+
+        # Fix 26: Add endFeatureUsage rule and update nonOccurrenceUsageElement.
+        # Handles unnamed end features with specialization in connection/flow/
+        # interface definition bodies (e.g., 'end :>> QualifiedName;').
+        # Also repositions variantReference to after endFeatureUsage.
+        grammar = grammar.replace(
+            "variantReference\n"
+            "    : ownedReferenceSubsetting featureSpecialization* usageBody\n"
+            "    ;\n"
+            "\n"
+            "nonOccurrenceUsageElement\n"
+            "    : defaultReferenceUsage\n"
+            "    | referenceUsage\n"
+            "    | attributeUsage\n",
+            "// Unnamed end feature with specialization (e.g., end :>> QualifiedName;)\n"
+            "// Handles end features in connection/flow/interface definition bodies\n"
+            "// where no name is given, only a redefines/subsets/typing.\n"
+            "endFeatureUsage\n"
+            "    : endUsagePrefix featureDeclaration usageCompletion\n"
+            "    ;\n"
+            "\n"
+            "variantReference\n"
+            "    : ownedReferenceSubsetting featureSpecialization* usageBody\n"
+            "    ;\n"
+            "\n"
+            "nonOccurrenceUsageElement\n"
+            "    : referenceUsage\n"
+            "    | endFeatureUsage\n"
+            "    | attributeUsage\n",
+        )
+        # Also remove the defaultReferenceUsage that was moved to the end
+        # (it's now after extendedUsage in the extension's ordering).
+        # The replacement above already omits defaultReferenceUsage from
+        # its original position, so we need to add it back at the end.
+        grammar = grammar.replace(
+            "    | successionAsUsage\n"
+            "    | extendedUsage\n"
+            "    ;",
+            "    | successionAsUsage\n"
+            "    | extendedUsage\n"
+            "    | defaultReferenceUsage\n"
+            "    ;",
+        )
+
+        # Fix 27: Make usageDeclaration optional in connection/binding/succession.
+        grammar = grammar.replace(
+            "    : occurrenceUsagePrefix ( CONNECTION usageDeclaration valuePart?",
+            "    : occurrenceUsagePrefix ( CONNECTION usageDeclaration? valuePart?",
+        )
+        grammar = grammar.replace(
+            "    : usagePrefix ( BINDING usageDeclaration )? BIND",
+            "    : usagePrefix ( BINDING usageDeclaration? )? BIND",
+        )
+        grammar = grammar.replace(
+            "    : usagePrefix ( SUCCESSION usageDeclaration )? FIRST connectorEndMember THEN connectorEndMember",
+            "    : usagePrefix ( SUCCESSION usageDeclaration? )? FIRST connectorEndMember THEN connectorEndMember",
+        )
+
+        # Fix 28: Make usageDeclaration optional in interface/allocation/message.
+        grammar = grammar.replace(
+            "interfaceUsageDeclaration\n"
+            "    : usageDeclaration valuePart? ( CONNECT interfacePart )?\n",
+            "interfaceUsageDeclaration\n"
+            "    : usageDeclaration? valuePart? ( CONNECT interfacePart )?\n",
+        )
+        grammar = grammar.replace(
+            "    : ALLOCATION usageDeclaration ( ALLOCATE",
+            "    : ALLOCATION usageDeclaration? ( ALLOCATE",
+        )
+        grammar = grammar.replace(
+            "messageDeclaration\n"
+            "    : usageDeclaration valuePart?",
+            "messageDeclaration\n"
+            "    : usageDeclaration? valuePart?",
+        )
+
+        # Fix 29: Make usageDeclaration optional in action-related rules.
+        grammar = grammar.replace(
+            "actionUsageDeclaration\n"
+            "    : usageDeclaration valuePart?\n",
+            "actionUsageDeclaration\n"
+            "    : usageDeclaration? valuePart?\n",
+        )
+        grammar = grammar.replace(
+            "performActionUsageDeclaration\n"
+            "    : ( ownedReferenceSubsetting featureSpecializationPart? | ACTION usageDeclaration ) valuePart?",
+            "performActionUsageDeclaration\n"
+            "    : ( ownedReferenceSubsetting featureSpecializationPart? | ACTION usageDeclaration? ) valuePart?",
+        )
+
+        # Fix 30: Make usageDeclaration optional in control nodes.
+        for node in ["mergeNode", "joinNode", "forkNode"]:
+            keyword = node.replace("Node", "").upper()
+            grammar = grammar.replace(
+                f"{node}\n    : controlNodePrefix {keyword} usageDeclaration actionBody",
+                f"{node}\n    : controlNodePrefix {keyword} usageDeclaration? actionBody",
+            )
+        grammar = grammar.replace(
+            "decisionNode\n    : controlNodePrefix DECIDE usageDeclaration actionBody",
+            "decisionNode\n    : controlNodePrefix DECIDE usageDeclaration? actionBody",
+        )
+
+        # Fix 31: Make identification optional in payloadParameter trigger.
+        grammar = grammar.replace(
+            "    | identification payloadFeatureSpecializationPart? triggerValuePart",
+            "    | identification? payloadFeatureSpecializationPart? triggerValuePart",
+        )
+
+        # Fix 32: Make usageDeclaration optional in for-loop variable declarations.
+        grammar = grammar.replace(
+            "forVariableDeclarationMember\n    : usageDeclaration\n    ;",
+            "forVariableDeclarationMember\n    : usageDeclaration?\n    ;",
+        )
+        grammar = grammar.replace(
+            "forVariableDeclaration\n    : usageDeclaration\n    ;",
+            "forVariableDeclaration\n    : usageDeclaration?\n    ;",
+        )
+
+        # Fix 33: Make usageDeclaration optional in state/transition rules.
+        grammar = grammar.replace(
+            "    : ( SUCCESSION usageDeclaration )? FIRST featureChainMember guardExpressionMember THEN transitionSuccessionMember",
+            "    : ( SUCCESSION usageDeclaration? )? FIRST featureChainMember guardExpressionMember THEN transitionSuccessionMember",
+        )
+        grammar = grammar.replace(
+            "    : occurrenceUsagePrefix EXHIBIT ( ownedReferenceSubsetting featureSpecializationPart? | STATE usageDeclaration ) valuePart?",
+            "    : occurrenceUsagePrefix EXHIBIT ( ownedReferenceSubsetting featureSpecializationPart? | STATE usageDeclaration? ) valuePart?",
+        )
+        grammar = grammar.replace(
+            "    : TRANSITION ( usageDeclaration FIRST )?",
+            "    : TRANSITION ( usageDeclaration? FIRST )?",
+        )
+
+        # Fix 34: Make usageDeclaration optional in constraint/requirement/usecase.
+        grammar = grammar.replace(
+            "constraintUsageDeclaration\n"
+            "    : usageDeclaration valuePart?\n",
+            "constraintUsageDeclaration\n"
+            "    : usageDeclaration? valuePart?\n",
+        )
+        grammar = grammar.replace(
+            "| REQUIREMENT usageDeclaration ) valuePart?",
+            "| REQUIREMENT usageDeclaration? ) valuePart?",
+        )
+        grammar = grammar.replace(
+            "| USE CASE usageDeclaration ) valuePart?",
+            "| USE CASE usageDeclaration? ) valuePart?",
+        )
+
+        # Fix 35: flowDeclaration — make usageDeclaration optional and remove
+        # the redundant 'flowEndMember TO flowEndMember' alternative (already
+        # covered by the preceding alternative with optional parts).
+        grammar = grammar.replace(
+            "flowDeclaration\n"
+            "    : featureDeclaration valuePart? ( OF payloadFeatureMember )? ( FROM flowEndMember TO flowEndMember )?\n"
+            "    | ( ALL )? flowEndMember TO flowEndMember\n"
+            "    | usageDeclaration valuePart? ( OF flowPayloadFeatureMember )? ( FROM flowEndMember TO flowEndMember )?\n"
+            "    | flowEndMember TO flowEndMember\n"
+            "    ;",
+            "flowDeclaration\n"
+            "    : featureDeclaration valuePart? ( OF payloadFeatureMember )? ( FROM flowEndMember TO flowEndMember )?\n"
+            "    | ( ALL )? flowEndMember TO flowEndMember\n"
+            "    | usageDeclaration? valuePart? ( OF flowPayloadFeatureMember )? ( FROM flowEndMember TO flowEndMember )?\n"
+            "    ;",
+        )
+
+        # Fix 36: payloadFeature — simplify and reorder to match extension.
+        # The extension uses identification? consistently and removes redundant
+        # alternatives that are subsumed by optional identification.
+        grammar = grammar.replace(
+            "payloadFeature\n"
+            "    : identification payloadFeatureSpecializationPart valuePart?\n"
+            "    | identification valuePart\n"
+            "    | ownedFeatureTyping ( ownedMultiplicity )?\n"
+            "    | ownedMultiplicity ( ownedFeatureTyping )?\n"
+            "    | identification? payloadFeatureSpecializationPart valuePart?\n"
+            "    | ownedMultiplicity ownedFeatureTyping\n"
+            "    ;",
+            "payloadFeature\n"
+            "    : identification? valuePart\n"
+            "    | identification? payloadFeatureSpecializationPart valuePart?\n"
+            "    | ownedFeatureTyping ( ownedMultiplicity )?\n"
+            "    | ownedMultiplicity ( ownedFeatureTyping )?\n"
+            "    ;",
+        )
+
+        # Fix 37: payloadFeatureSpecializationPart — remove redundant alternative.
+        grammar = grammar.replace(
+            "payloadFeatureSpecializationPart\n"
+            "    : featureSpecialization+ multiplicityPart? featureSpecialization*\n"
+            "    | multiplicityPart featureSpecialization+\n"
+            "    | ( featureSpecialization )+ multiplicityPart? featureSpecialization*\n"
+            "    ;",
+            "payloadFeatureSpecializationPart\n"
+            "    : featureSpecialization+ multiplicityPart? featureSpecialization*\n"
+            "    | multiplicityPart featureSpecialization+\n"
+            "    ;",
         )
 
         return grammar
