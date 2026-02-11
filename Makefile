@@ -1,4 +1,4 @@
-.PHONY: help install install-dev generate lint lint-python lint-yaml lint-actions validate parse-examples clean
+.PHONY: help install install-dev generate lint lint-python lint-yaml lint-actions validate parse-examples clean download-antlr
 
 PYTHON     ?= python3
 PIP        ?= pip
@@ -63,6 +63,8 @@ format: ## Auto-format Python scripts
 $(ANTLR_JAR):
 	curl -fsSL -o $(ANTLR_JAR) $(ANTLR_URL)
 	echo "$(ANTLR_SHA)  $(ANTLR_JAR)" | sha256sum -c -
+
+download-antlr: $(ANTLR_JAR) ## Download and verify the ANTLR4 JAR
 
 validate: $(ANTLR_JAR) ## Compile grammar with ANTLR4 (Java target)
 	@mkdir -p /tmp/antlr-out
