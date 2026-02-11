@@ -1,4 +1,4 @@
-.PHONY: help install install-dev generate lint lint-python lint-yaml lint-actions validate parse-examples clean download-antlr
+.PHONY: help install install-dev generate lint lint-python lint-yaml lint-actions audit validate parse-examples clean download-antlr
 
 PYTHON     ?= python3
 PIP        ?= pip
@@ -20,7 +20,7 @@ install: ## Install runtime Python dependencies
 	$(PIP) install -r scripts/requirements.txt
 
 install-dev: install ## Install runtime + linting dependencies
-	$(PIP) install ruff yamllint actionlint-py
+	$(PIP) install ruff yamllint actionlint-py pip-audit
 
 # ---------------------------------------------------------------------------
 # Grammar generation
@@ -58,6 +58,13 @@ format: ## Auto-format Python scripts
 	ruff check --fix scripts/
 
 # ---------------------------------------------------------------------------
+# Security
+# ---------------------------------------------------------------------------
+
+audit: ## Scan Python dependencies for known vulnerabilities
+	pip-audit -r scripts/requirements.txt
+
+# ---------------------------------------------------------------------------
 # Validation (requires Java 17+)
 # ---------------------------------------------------------------------------
 
@@ -83,8 +90,8 @@ parse-examples: $(ANTLR_JAR) ## Parse example .sysml files through the grammar
 	@mkdir -p /tmp/antlr-test
 	java -jar $(ANTLR_JAR) -Dlanguage=Java -o /tmp/antlr-test \
 		grammar/SysMLv2Lexer.g4 grammar/SysMLv2.g4
-	cd /tmp/antlr-test && javac -cp "$(ANTLR_JAR):." *.java
-	@cd /tmp/antlr-test && PASS=0; FAIL=0; \
+	cd /tmp/antlr-test/grammar && javac -cp "$(ANTLR_JAR):." *.java
+	@cd /tmp/antlr-test/grammar && PASS=0; FAIL=0; \
 	for f in $(CURDIR)/examples/*.sysml; do \
 		printf "Parsing $$(basename $$f)... "; \
 		if java -cp "$(ANTLR_JAR):." org.antlr.v4.gui.TestRig SysMLv2 rootNamespace "$$f" 2>&1 | grep -qi "error"; then \
@@ -107,4 +114,4 @@ clean: ## Remove generated/cached artifacts
 	rm -rf /tmp/antlr-out /tmp/antlr-out-ts /tmp/antlr-test
 	rm -rf .grammar-cache __pycache__ scripts/__pycache__
 
-ci: lint drift-check validate parse-examples ## Run full CI pipeline locally
+ci: lint audit drift-check validate parse-examples ## Run full CI pipeline locally

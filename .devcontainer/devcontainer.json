@@ -13,7 +13,7 @@
     }
   },
 
-  "postCreateCommand": "make install-dev && make download-antlr",
+  "postCreateCommand": "pip install --upgrade pip && make install-dev && make download-antlr",
 
   "customizations": {
     "vscode": {
