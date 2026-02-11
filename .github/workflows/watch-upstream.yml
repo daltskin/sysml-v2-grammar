@@ -115,7 +115,7 @@ jobs:
           Upstream release changed from $CURRENT to $LATEST.
           Grammar files regenerated from Systems-Modeling/SysML-v2-Release@$LATEST."
 
-          git push --force-with-lease origin "$BRANCH"
+          git push --force origin "$BRANCH"
 
           # Skip PR creation if one already exists for this branch
           EXISTING=$(gh pr list --head "$BRANCH" --json number --jq '.[0].number')
