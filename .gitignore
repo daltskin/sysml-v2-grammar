@@ -8,6 +8,9 @@ venv/
 # Grammar cache
 .grammar-cache/
 
+# Linter cache
+.ruff_cache/
+
 # IDE
 .vscode/
 .idea/
