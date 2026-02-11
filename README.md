@@ -30,7 +30,7 @@ make validate-ts       # Compile grammar with ANTLR4 (TypeScript target)
 make parse-examples    # Parse example .sysml files through the grammar
 make lint              # Run all linters (ruff, yamllint, actionlint)
 make audit             # Scan Python dependencies for known CVEs
-make format            # Auto-format Python scripts
+make format            # Auto-format Python scripts and grammar files
 make ci                # Run full CI pipeline locally
 make help              # Show all available targets
 ```
@@ -47,11 +47,13 @@ The generated `.g4` files are written to `grammar/`.
 
 ```
 ├── grammar/
-│   ├── SysMLv2.g4          # Parser grammar (generated)
-│   ├── SysMLv2Lexer.g4     # Lexer grammar (generated)
-│   └── SysMLv2Lexer.tokens # Token vocabulary
+│   ├── SysMLv2Parser.g4     # Parser grammar (generated)
+│   ├── SysMLv2Lexer.g4      # Lexer grammar (generated)
+│   └── SysMLv2Lexer.tokens  # Token vocabulary
 ├── scripts/
 │   ├── generate_grammar.py  # KEBNF → ANTLR4 converter
+│   ├── build_contrib.py     # grammars-v4 contribution builder
+│   ├── find_cycles.py       # Left-recursion cycle detector
 │   ├── config.json          # Generator configuration
 │   ├── requirements.txt     # Python dependencies
 │   ├── kebnf_grammar.lark   # Lark grammar for KEBNF parsing
@@ -98,7 +100,7 @@ Or directly:
 
 ```bash
 java -jar .build/antlr4.jar -Dlanguage=Java \
-  grammar/SysMLv2Lexer.g4 grammar/SysMLv2.g4
+  grammar/SysMLv2Lexer.g4 grammar/SysMLv2Parser.g4
 ```
 
 ### TypeScript
@@ -111,7 +113,7 @@ Or with post-processing for CommonJS compatibility:
 
 ```bash
 java -jar .build/antlr4.jar -Dlanguage=TypeScript -visitor -no-listener \
-  grammar/SysMLv2Lexer.g4 grammar/SysMLv2.g4
+  grammar/SysMLv2Lexer.g4 grammar/SysMLv2Parser.g4
 node scripts/postprocess-antlr.js
 ```
 
@@ -119,7 +121,7 @@ node scripts/postprocess-antlr.js
 
 ```bash
 java -jar .build/antlr4.jar -Dlanguage=Python3 \
-  grammar/SysMLv2Lexer.g4 grammar/SysMLv2.g4
+  grammar/SysMLv2Lexer.g4 grammar/SysMLv2Parser.g4
 ```
 
 ## CI / CD
@@ -140,8 +142,8 @@ a pull request with regenerated grammar files.
 
 ## Current Spec Version
 
-- **Release**: `2025-12`
-- **Source**: [Systems-Modeling/SysML-v2-Release](https://github.com/Systems-Modeling/SysML-v2-Release/tree/2025-12)
+- **Release**: `2026-01`
+- **Source**: [Systems-Modeling/SysML-v2-Release](https://github.com/Systems-Modeling/SysML-v2-Release/tree/2026-01)
 
 ## Contributing to grammars-v4
 
@@ -157,8 +159,8 @@ The `contrib` target generates:
 
 | File | Purpose |
 |------|---------|
-| `SysMLv2.g4` | Parser grammar — EOF-patched, antlr-formatted |
-| `SysMLv2Lexer.g4` | Lexer grammar — antlr-formatted |
+| `SysMLv2Parser.g4` | Parser grammar (identical to `grammar/`) |
+| `SysMLv2Lexer.g4` | Lexer grammar (identical to `grammar/`) |
 | `pom.xml` | Maven test configuration |
 | `desc.xml` | trgen test descriptor |
 | `README.md` | Documentation with source references |

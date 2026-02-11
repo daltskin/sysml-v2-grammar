@@ -457,11 +457,9 @@ class Antlr4Transformer:
         self,
         rules: Dict[str, GrammarRule],
         rule_order: List[str],
-        release_tag: str = "",
     ):
         self.rules = rules
         self.rule_order = rule_order
-        self.release_tag = release_tag
         self.keywords: Set[str] = set()
         self.operators: Set[str] = set()
         self._collect_terminals()
@@ -534,16 +532,26 @@ class Antlr4Transformer:
         """Generate the ANTLR4 lexer grammar."""
         lines = []
         lines.append("/*")
-        lines.append(" * SysML v2.0 ANTLR4 Lexer Grammar")
-        lines.append(
-            f" * AUTO-GENERATED from official SysML v2 specification BNF (release {self.release_tag})"
-        )
-        lines.append(
-            " * Do not edit manually — run: python scripts/grammar/generate_grammar.py"
-        )
+        lines.append(" * SysML v2 ANTLR4 Grammar")
+        lines.append(" * Derived from the OMG SysML v2 specification (KEBNF format).")
+        lines.append(" * Source: https://github.com/Systems-Modeling/SysML-v2-Release")
+        lines.append(" * Generator: https://github.com/daltskin/sysml-v2-grammar")
+        lines.append(" * License: MIT")
         lines.append(" */")
         lines.append("")
         lines.append("lexer grammar SysMLv2Lexer;")
+        lines.append("")
+        # antlr-format configuration (required by grammars-v4 CI)
+        lines.append(
+            "// $antlr-format alignTrailingComments true, columnLimit 150, useTab false"
+        )
+        lines.append(
+            "// $antlr-format allowShortRulesOnASingleLine false, allowShortBlocksOnASingleLine true"
+        )
+        lines.append("// $antlr-format alignSemicolons hanging, alignColons hanging")
+        lines.append(
+            "// $antlr-format minEmptyLines 1, maxEmptyLinesToKeep 1, reflowComments false"
+        )
         lines.append("")
 
         # Keywords (sorted alphabetically)
@@ -601,20 +609,30 @@ class Antlr4Transformer:
 
         lines = []
         lines.append("/*")
-        lines.append(" * SysML v2.0 ANTLR4 Parser Grammar")
-        lines.append(
-            f" * AUTO-GENERATED from official SysML v2 specification BNF (release {self.release_tag})"
-        )
-        lines.append(
-            " * Do not edit manually — run: python scripts/grammar/generate_grammar.py"
-        )
+        lines.append(" * SysML v2 ANTLR4 Grammar")
+        lines.append(" * Derived from the OMG SysML v2 specification (KEBNF format).")
+        lines.append(" * Source: https://github.com/Systems-Modeling/SysML-v2-Release")
+        lines.append(" * Generator: https://github.com/daltskin/sysml-v2-grammar")
+        lines.append(" * License: MIT")
         lines.append(" */")
         lines.append("")
-        lines.append("parser grammar SysMLv2;")
+        lines.append("parser grammar SysMLv2Parser;")
         lines.append("")
         lines.append("options {")
         lines.append("    tokenVocab = SysMLv2Lexer;")
         lines.append("}")
+        lines.append("")
+        # antlr-format configuration (required by grammars-v4 CI)
+        lines.append(
+            "// $antlr-format alignTrailingComments true, columnLimit 150, useTab false"
+        )
+        lines.append(
+            "// $antlr-format allowShortRulesOnASingleLine false, allowShortBlocksOnASingleLine true"
+        )
+        lines.append("// $antlr-format alignSemicolons hanging, alignColons hanging")
+        lines.append(
+            "// $antlr-format minEmptyLines 1, maxEmptyLinesToKeep 1, reflowComments false"
+        )
         lines.append("")
 
         # Generate expression rules with proper precedence
@@ -1000,15 +1018,16 @@ class Antlr4Transformer:
             ": ( REP identification? )? LANGUAGE",
         )
 
-        # Fix 15: rootNamespace should only match packageBodyElement*.
+        # Fix 15: rootNamespace should only match packageBodyElement* EOF.
         # The namespaceBodyElement* alternative is redundant since
         # packageBodyElement encompasses all valid top-level elements.
+        # EOF ensures the parser consumes the entire input.
         grammar = grammar.replace(
             "rootNamespace\n"
             "    : namespaceBodyElement*\n"
             "    | packageBodyElement*\n"
             "    ;",
-            "rootNamespace\n    : packageBodyElement*\n    ;",
+            "rootNamespace\n    : packageBodyElement* EOF\n    ;",
         )
 
         # Fix 16: Make identification optional in namespace/type/classifier
@@ -2171,9 +2190,7 @@ def main():
 
     # Step 3: Transform
     print("Step 3: Transforming to ANTLR4...")
-    transformer = Antlr4Transformer(
-        kebnf_parser.rules, kebnf_parser.rule_order, config["release_tag"]
-    )
+    transformer = Antlr4Transformer(kebnf_parser.rules, kebnf_parser.rule_order)
     print(f"  Keywords found: {len(transformer.keywords)}")
     print(f"  Operators found: {len(transformer.operators)}")
     print()

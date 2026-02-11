@@ -5,7 +5,7 @@
   "features": {
     "ghcr.io/devcontainers/features/java:1": {
       "version": "17",
-      "installMaven": "false",
+      "installMaven": "true",
       "installGradle": "false"
     },
     "ghcr.io/devcontainers/features/node:1": {

@@ -132,7 +132,7 @@ jobs:
 
           ### Changes
           - Updated \`scripts/config.json\` release tag to \`$LATEST\`
-          - Regenerated \`grammar/SysMLv2.g4\` and \`grammar/SysMLv2Lexer.g4\`
+          - Regenerated \`grammar/SysMLv2Parser.g4\` and \`grammar/SysMLv2Lexer.g4\`
 
           ### Source
           [Systems-Modeling/SysML-v2-Release@$LATEST](https://github.com/Systems-Modeling/SysML-v2-Release/tree/$LATEST)

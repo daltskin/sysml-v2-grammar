@@ -70,5 +70,5 @@ def analyze_grammar(path):
 
 
 if __name__ == "__main__":
-    path = sys.argv[1] if len(sys.argv) > 1 else "grammar/SysMLv2.g4"
+    path = sys.argv[1] if len(sys.argv) > 1 else "grammar/SysMLv2Parser.g4"
     analyze_grammar(path)

@@ -1,4 +1,4 @@
-.PHONY: help install install-dev generate lint lint-python lint-yaml lint-actions audit validate parse-examples clean download-antlr contrib contrib-verify
+.PHONY: help install install-dev generate drift-check lint lint-python lint-yaml lint-actions format audit validate validate-ts parse-examples cycles clean download-antlr contrib contrib-verify contrib-test ci
 
 PYTHON     ?= python3
 PIP        ?= pip
@@ -29,6 +29,15 @@ install-dev: install ## Install runtime + linting dependencies
 
 generate: ## Regenerate ANTLR4 grammar from OMG spec
 	$(PYTHON) scripts/generate_grammar.py $(if $(TAG),--tag $(TAG)) --cache
+	@if command -v antlr-format >/dev/null 2>&1; then \
+		echo "Formatting grammar files with antlr-format …"; \
+		antlr-format grammar/SysMLv2Parser.g4 grammar/SysMLv2Lexer.g4; \
+	elif command -v npx >/dev/null 2>&1; then \
+		echo "Formatting grammar files with antlr-format …"; \
+		npx --yes antlr-format-cli grammar/SysMLv2Parser.g4 grammar/SysMLv2Lexer.g4; \
+	else \
+		echo "⚠️  antlr-format not found — grammar files left unformatted"; \
+	fi
 
 drift-check: generate ## Check that committed grammar matches generator output
 	@if git diff --exit-code grammar/; then \
@@ -54,9 +63,14 @@ lint-yaml: ## Lint YAML files with yamllint
 lint-actions: ## Lint GitHub Actions workflows with actionlint
 	actionlint .github/workflows/*.yml
 
-format: ## Auto-format Python scripts
+format: ## Auto-format Python scripts and grammar files
 	ruff format scripts/
 	ruff check --fix scripts/
+	@if command -v antlr-format >/dev/null 2>&1; then \
+		antlr-format grammar/SysMLv2Parser.g4 grammar/SysMLv2Lexer.g4; \
+	elif command -v npx >/dev/null 2>&1; then \
+		npx --yes antlr-format-cli grammar/SysMLv2Parser.g4 grammar/SysMLv2Lexer.g4; \
+	fi
 
 # ---------------------------------------------------------------------------
 # Security
@@ -79,24 +93,24 @@ download-antlr: $(ANTLR_JAR) ## Download and verify the ANTLR4 JAR
 validate: $(ANTLR_JAR) ## Compile grammar with ANTLR4 (Java target)
 	@mkdir -p $(BUILD_DIR)/antlr-out
 	java -jar $(ANTLR_JAR) -Dlanguage=Java -o $(BUILD_DIR)/antlr-out \
-		grammar/SysMLv2Lexer.g4 grammar/SysMLv2.g4
+		grammar/SysMLv2Lexer.g4 grammar/SysMLv2Parser.g4
 	@echo "✅ Grammar compiles successfully"
 
 validate-ts: $(ANTLR_JAR) ## Compile grammar with ANTLR4 (TypeScript target)
 	@mkdir -p $(BUILD_DIR)/antlr-out-ts
 	java -jar $(ANTLR_JAR) -Dlanguage=TypeScript -visitor -no-listener \
-		-o $(BUILD_DIR)/antlr-out-ts grammar/SysMLv2Lexer.g4 grammar/SysMLv2.g4
+		-o $(BUILD_DIR)/antlr-out-ts grammar/SysMLv2Lexer.g4 grammar/SysMLv2Parser.g4
 	@echo "✅ TypeScript target compiles successfully"
 
 parse-examples: $(ANTLR_JAR) ## Parse example .sysml files through the grammar
 	@mkdir -p $(BUILD_DIR)/antlr-test
 	java -jar $(ANTLR_JAR) -Dlanguage=Java -o $(BUILD_DIR)/antlr-test \
-		grammar/SysMLv2Lexer.g4 grammar/SysMLv2.g4
+		grammar/SysMLv2Lexer.g4 grammar/SysMLv2Parser.g4
 	cd $(BUILD_DIR)/antlr-test/grammar && javac -cp "$(CURDIR)/$(ANTLR_JAR):." *.java
 	@cd $(BUILD_DIR)/antlr-test/grammar && PASS=0; FAIL=0; \
 	for f in $(CURDIR)/examples/*.sysml; do \
 		printf "Parsing $$(basename $$f)... "; \
-		if java -cp "$(CURDIR)/$(ANTLR_JAR):." org.antlr.v4.gui.TestRig SysMLv2 rootNamespace "$$f" 2>&1 | grep -qi "error"; then \
+		if java -cp "$(CURDIR)/$(ANTLR_JAR):." org.antlr.v4.gui.TestRig SysMLv2Parser rootNamespace "$$f" 2>&1 | grep -qi "error"; then \
 			echo "❌ FAIL"; FAIL=$$((FAIL + 1)); \
 		else \
 			echo "✅ PASS"; PASS=$$((PASS + 1)); \
@@ -110,7 +124,7 @@ parse-examples: $(ANTLR_JAR) ## Parse example .sysml files through the grammar
 # ---------------------------------------------------------------------------
 
 cycles: ## Detect left-recursion cycles in the grammar
-	$(PYTHON) scripts/find_cycles.py grammar/SysMLv2.g4
+	$(PYTHON) scripts/find_cycles.py grammar/SysMLv2Parser.g4
 
 clean: ## Remove generated/cached artifacts
 	rm -rf $(BUILD_DIR)
@@ -127,5 +141,16 @@ contrib: ## Build grammars-v4 contribution directory
 
 contrib-verify: ## Build and verify grammars-v4 contribution
 	$(PYTHON) scripts/build_contrib.py --verify
+
+contrib-test: contrib ## Build contrib, then run Maven test against it (requires Maven + Java)
+	@echo "🧪 Running Maven test against contribution directory …"
+	@if ! command -v mvn >/dev/null 2>&1; then \
+		echo "⚠️  Maven not found — install Maven to run grammars-v4 integration test"; \
+		exit 1; \
+	fi
+	@cd contrib/sysml/sysmlv2 && \
+		mvn -q --batch-mode -f pom-standalone.xml test && \
+		echo "✅ Maven test passed" || \
+		(echo "❌ Maven test failed"; exit 1)
 
 ci: lint audit drift-check validate parse-examples contrib-verify ## Run full CI pipeline locally
