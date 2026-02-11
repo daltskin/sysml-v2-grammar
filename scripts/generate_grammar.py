@@ -16,66 +16,85 @@ import re
 import argparse
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Set
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 # ---------------------------------------------------------------------------
 # Data structures for the intermediate representation
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class RuleElement:
     """Base class for elements within a grammar rule."""
+
     pass
+
 
 @dataclass
 class Terminal(RuleElement):
     """A quoted terminal string like 'package'."""
+
     value: str  # The string without quotes
+
 
 @dataclass
 class NonTerminal(RuleElement):
     """A reference to another rule."""
+
     name: str
+
 
 @dataclass
 class QualifiedNameRef(RuleElement):
     """A [QualifiedName] cross-reference — becomes a rule ref in ANTLR4."""
+
     conjugated: bool = False  # True if preceded by ~
+
 
 @dataclass
 class Repetition(RuleElement):
     """A repetition modifier (?, +, *)."""
+
     child: RuleElement
     modifier: str  # '?', '+', or '*'
+
 
 @dataclass
 class Group(RuleElement):
     """A parenthesized alternation group."""
+
     alternatives: list  # List of sequences (each sequence is a list of RuleElement)
+
 
 @dataclass
 class Sequence(RuleElement):
     """A sequence of elements."""
+
     elements: list  # List of RuleElement
+
 
 @dataclass
 class Alternative(RuleElement):
     """An alternation of sequences."""
+
     sequences: list  # List of Sequence
+
 
 @dataclass
 class GrammarRule:
     """A parsed grammar rule from the .kebnf file."""
+
     name: str
     parent_type: Optional[str]  # The type after ':', or None
     alternatives: list  # List of lists of RuleElement (each alt is a sequence)
     is_lexical: bool = False  # True for UPPER_CASE rules
-    source: str = ''  # 'kerml' or 'sysml'
+    source: str = ""  # 'kerml' or 'sysml'
 
 
 # ---------------------------------------------------------------------------
 # .kebnf Parser (regex-based, not using Lark — more robust for this format)
 # ---------------------------------------------------------------------------
+
 
 class KebnfParser:
     """Parses .kebnf files into GrammarRule objects."""
@@ -87,28 +106,28 @@ class KebnfParser:
     def parse_file(self, content: str, source: str) -> Dict[str, GrammarRule]:
         """Parse a .kebnf file content into rules."""
         # Normalize line endings
-        content = content.replace('\r\n', '\n').replace('\r', '\n')
+        content = content.replace("\r\n", "\n").replace("\r", "\n")
 
         # Join continuation lines (lines starting with whitespace)
-        lines = content.split('\n')
+        lines = content.split("\n")
         joined_lines = []
         for line in lines:
-            if line and (line[0] == ' ' or line[0] == '\t'):
+            if line and (line[0] == " " or line[0] == "\t"):
                 if joined_lines:
-                    joined_lines[-1] += ' ' + line.strip()
+                    joined_lines[-1] += " " + line.strip()
                 else:
                     joined_lines.append(line.strip())
             else:
                 joined_lines.append(line)
 
         # Rejoin and split by rule boundaries
-        full_text = '\n'.join(joined_lines)
+        full_text = "\n".join(joined_lines)
 
         # Extract rules using regex
         # Rules look like: RuleName : Type = body  OR  RuleName = body  OR  LEXICAL_NAME = body
         rule_pattern = re.compile(
-            r'^([A-Z][A-Za-z_]+)\s*(?::\s*([A-Z][A-Za-z]+)\s*)?=\s*(.*?)(?=\n[A-Z]|\n//|\Z)',
-            re.MULTILINE | re.DOTALL
+            r"^([A-Z][A-Za-z_]+)\s*(?::\s*([A-Z][A-Za-z]+)\s*)?=\s*(.*?)(?=\n[A-Z]|\n//|\Z)",
+            re.MULTILINE | re.DOTALL,
         )
 
         for match in rule_pattern.finditer(full_text):
@@ -116,13 +135,13 @@ class KebnfParser:
             parent_type = match.group(2)
             body = match.group(3).strip()
 
-            is_lexical = bool(re.match(r'^[A-Z][A-Z_]+$', name))
+            is_lexical = bool(re.match(r"^[A-Z][A-Z_]+$", name))
 
             # Skip rules with empty body or body that is only non-parsing blocks {}.
             # These are semantic-only constructs (e.g., EmptyFeature, EmptyUsage)
             # that would create epsilon alternatives causing ANTLR4 stack overflow.
-            stripped_body = re.sub(r'\s+', '', body)
-            if not body or stripped_body == '{}':
+            stripped_body = re.sub(r"\s+", "", body)
+            if not body or stripped_body == "{}":
                 continue
 
             # Parse the body into alternatives
@@ -139,7 +158,7 @@ class KebnfParser:
                     parent_type=parent_type,
                     alternatives=alternatives,
                     is_lexical=is_lexical,
-                    source=source
+                    source=source,
                 )
                 self.rules[name] = rule
                 self.rule_order.append(name)
@@ -170,7 +189,7 @@ class KebnfParser:
                 current.append(ch)
                 i += 1
                 while i < len(text) and text[i] != "'":
-                    if text[i] == '\\':
+                    if text[i] == "\\":
                         current.append(text[i])
                         i += 1
                     current.append(text[i])
@@ -179,19 +198,19 @@ class KebnfParser:
                     current.append(text[i])
                     i += 1
                 continue
-            elif ch == '(':
+            elif ch == "(":
                 depth += 1
-            elif ch == ')':
+            elif ch == ")":
                 depth -= 1
-            elif ch == '|' and depth == 0:
-                parts.append(''.join(current))
+            elif ch == "|" and depth == 0:
+                parts.append("".join(current))
                 current = []
                 i += 1
                 continue
             current.append(ch)
             i += 1
         if current:
-            parts.append(''.join(current))
+            parts.append("".join(current))
         return parts
 
     def _parse_sequence(self, text: str) -> list:
@@ -204,9 +223,11 @@ class KebnfParser:
 
             # Skip property assignments (semantic actions)
             # Pattern: lowercaseProp (=|+=|?=) value
-            if (i + 2 < len(tokens)
-                and tokens[i + 1] in ('=', '+=', '?=')
-                and tok[0].islower()):
+            if (
+                i + 2 < len(tokens)
+                and tokens[i + 1] in ("=", "+=", "?=")
+                and tok[0].islower()
+            ):
                 # prop = value or prop += value or prop ?= value
                 # The value is the next token — keep it if it's a grammar element
                 value_tok = tokens[i + 2]
@@ -214,9 +235,9 @@ class KebnfParser:
 
                 # If value starts a group '(', parse it as a grouped alternation
                 # e.g. kind = ( 'at' | 'after' ) → ( AT | AFTER )
-                if value_tok == '(':
+                if value_tok == "(":
                     group_tokens, end_i = self._extract_group(tokens, i - 1)
-                    group_text = ' '.join(group_tokens)
+                    group_text = " ".join(group_tokens)
                     group_alts = self._split_alternatives(group_text)
                     group_seqs = []
                     for alt in group_alts:
@@ -226,7 +247,7 @@ class KebnfParser:
                     if group_seqs:
                         elem = Group(alternatives=group_seqs)
                         # Check for repetition after group
-                        if end_i < len(tokens) and tokens[end_i] in ('?', '+', '*'):
+                        if end_i < len(tokens) and tokens[end_i] in ("?", "+", "*"):
                             elem = Repetition(child=elem, modifier=tokens[end_i])
                             end_i += 1
                         elements.append(elem)
@@ -238,21 +259,21 @@ class KebnfParser:
                 continue
 
             # Skip nonparsing blocks { ... }
-            if tok == '{':
+            if tok == "{":
                 depth = 1
                 i += 1
                 while i < len(tokens) and depth > 0:
-                    if tokens[i] == '{':
+                    if tokens[i] == "{":
                         depth += 1
-                    elif tokens[i] == '}':
+                    elif tokens[i] == "}":
                         depth -= 1
                     i += 1
                 continue
 
             # Handle parenthesized groups
-            if tok == '(':
+            if tok == "(":
                 group_tokens, end_i = self._extract_group(tokens, i)
-                group_text = ' '.join(group_tokens)
+                group_text = " ".join(group_tokens)
                 group_alts = self._split_alternatives(group_text)
                 group_seqs = []
                 for alt in group_alts:
@@ -264,7 +285,7 @@ class KebnfParser:
 
                 # Check for repetition after group
                 i = end_i
-                if i < len(tokens) and tokens[i] in ('?', '+', '*'):
+                if i < len(tokens) and tokens[i] in ("?", "+", "*"):
                     elem = Repetition(child=elem, modifier=tokens[i])
                     i += 1
                 elements.append(elem)
@@ -275,7 +296,7 @@ class KebnfParser:
             if elem is not None:
                 i += 1
                 # Check for repetition
-                if i < len(tokens) and tokens[i] in ('?', '+', '*'):
+                if i < len(tokens) and tokens[i] in ("?", "+", "*"):
                     elem = Repetition(child=elem, modifier=tokens[i])
                     i += 1
                 elements.append(elem)
@@ -291,7 +312,7 @@ class KebnfParser:
         text = text.strip()
         while i < len(text):
             # Skip whitespace
-            if text[i] in (' ', '\t', '\n'):
+            if text[i] in (" ", "\t", "\n"):
                 i += 1
                 continue
 
@@ -299,7 +320,7 @@ class KebnfParser:
             if text[i] == "'":
                 j = i + 1
                 while j < len(text):
-                    if text[j] == '\\':
+                    if text[j] == "\\":
                         j += 2
                         continue
                     if text[j] == "'":
@@ -311,39 +332,39 @@ class KebnfParser:
                 continue
 
             # [QualifiedName] cross-references
-            if text[i] == '[':
-                j = text.index(']', i) + 1
+            if text[i] == "[":
+                j = text.index("]", i) + 1
                 tokens.append(text[i:j])
                 i = j
                 continue
 
             # ~[QualifiedName]
-            if text[i] == '~' and i + 1 < len(text) and text[i + 1] == '[':
-                j = text.index(']', i) + 1
+            if text[i] == "~" and i + 1 < len(text) and text[i + 1] == "[":
+                j = text.index("]", i) + 1
                 tokens.append(text[i:j])
                 i = j
                 continue
 
             # Single-char tokens
-            if text[i] in ('(', ')', '{', '}', '?', '+', '*', '|'):
+            if text[i] in ("(", ")", "{", "}", "?", "+", "*", "|"):
                 tokens.append(text[i])
                 i += 1
                 continue
 
             # Multi-char operators
-            if text[i:i+2] in ('+=', '?='):
-                tokens.append(text[i:i+2])
+            if text[i : i + 2] in ("+=", "?="):
+                tokens.append(text[i : i + 2])
                 i += 2
                 continue
-            if text[i] == '=':
-                tokens.append('=')
+            if text[i] == "=":
+                tokens.append("=")
                 i += 1
                 continue
 
             # Identifiers (rule names, property names)
-            if text[i].isalpha() or text[i] == '_':
+            if text[i].isalpha() or text[i] == "_":
                 j = i
-                while j < len(text) and (text[j].isalnum() or text[j] in ('_', '.')):
+                while j < len(text) and (text[j].isalnum() or text[j] in ("_", ".")):
                     j += 1
                 tokens.append(text[i:j])
                 i = j
@@ -360,9 +381,9 @@ class KebnfParser:
         i = start + 1  # skip opening (
         inner = []
         while i < len(tokens) and depth > 0:
-            if tokens[i] == '(':
+            if tokens[i] == "(":
                 depth += 1
-            elif tokens[i] == ')':
+            elif tokens[i] == ")":
                 depth -= 1
                 if depth == 0:
                     i += 1
@@ -373,7 +394,7 @@ class KebnfParser:
 
     def _is_rule_ref(self, tok: str) -> bool:
         """Check if a token is a rule name reference."""
-        return bool(re.match(r'^[A-Z]', tok)) and tok not in ('true', 'false')
+        return bool(re.match(r"^[A-Z]", tok)) and tok not in ("true", "false")
 
     def _is_terminal(self, tok: str) -> bool:
         """Check if a token is a terminal (quoted string)."""
@@ -384,13 +405,13 @@ class KebnfParser:
         if tok.startswith("'") and tok.endswith("'"):
             value = tok[1:-1].replace("\\'", "'")
             return Terminal(value=value)
-        elif tok == '[QualifiedName]':
+        elif tok == "[QualifiedName]":
             return QualifiedNameRef(conjugated=False)
-        elif tok.startswith('~['):
+        elif tok.startswith("~["):
             return QualifiedNameRef(conjugated=True)
-        elif re.match(r'^[A-Z]', tok):
+        elif re.match(r"^[A-Z]", tok):
             return NonTerminal(name=tok)
-        elif tok in ('true', 'false'):
+        elif tok in ("true", "false"):
             return Terminal(value=tok)
         return None
 
@@ -402,31 +423,31 @@ class KebnfParser:
 # Operator precedence from SysML v2 spec Table 6 (lowest to highest)
 OPERATOR_PRECEDENCE = [
     # (operators, name, associativity)
-    (['if'], 'conditional', 'none'),       # Ternary if ? : else
-    (['??'], 'nullCoalescing', 'left'),
-    (['implies'], 'implies', 'left'),
-    (['or'], 'logicalOr', 'left'),
-    (['and'], 'logicalAnd', 'left'),
-    (['xor'], 'xor', 'left'),
-    (['|'], 'bitwiseOr', 'left'),
-    (['&'], 'bitwiseAnd', 'left'),
-    (['==', '!=', '===', '!=='], 'equality', 'left'),
-    (['<', '>', '<=', '>='], 'relational', 'left'),
-    (['..'], 'range', 'left'),
-    (['+', '-'], 'additive', 'left'),
-    (['*', '/', '%'], 'multiplicative', 'left'),
-    (['**', '^'], 'exponentiation', 'right'),
+    (["if"], "conditional", "none"),  # Ternary if ? : else
+    (["??"], "nullCoalescing", "left"),
+    (["implies"], "implies", "left"),
+    (["or"], "logicalOr", "left"),
+    (["and"], "logicalAnd", "left"),
+    (["xor"], "xor", "left"),
+    (["|"], "bitwiseOr", "left"),
+    (["&"], "bitwiseAnd", "left"),
+    (["==", "!=", "===", "!=="], "equality", "left"),
+    (["<", ">", "<=", ">="], "relational", "left"),
+    ([".."], "range", "left"),
+    (["+", "-"], "additive", "left"),
+    (["*", "/", "%"], "multiplicative", "left"),
+    (["**", "^"], "exponentiation", "right"),
 ]
 
-UNARY_OPERATORS = ['+', '-', '~', 'not']
+UNARY_OPERATORS = ["+", "-", "~", "not"]
 
-CLASSIFICATION_OPERATORS = ['istype', 'hastype', '@']
-CAST_OPERATOR = 'as'
-META_CLASSIFICATION_OPERATORS = ['@@']
-META_CAST_OPERATOR = 'meta'
+CLASSIFICATION_OPERATORS = ["istype", "hastype", "@"]
+CAST_OPERATOR = "as"
+META_CLASSIFICATION_OPERATORS = ["@@"]
+META_CAST_OPERATOR = "meta"
 
 # Primary expression postfix operators
-POSTFIX_OPERATORS = ['.', '.?', '->', '#', '[']
+POSTFIX_OPERATORS = [".", ".?", "->", "#", "["]
 
 
 class Antlr4Transformer:
@@ -466,32 +487,34 @@ class Antlr4Transformer:
             if len(kw) <= 1:
                 continue
             # Skip descriptive text (contains spaces, too long)
-            if ' ' in kw or len(kw) > 30:
+            if " " in kw or len(kw) > 30:
                 continue
             # Must be a valid identifier-like keyword
-            if re.match(r'^[a-z][a-zA-Z]*$', kw):
+            if re.match(r"^[a-z][a-zA-Z]*$", kw):
                 filtered_kw.add(kw)
         self.keywords = filtered_kw
 
         # Also add keywords from RESERVED_KEYWORD rule if present
-        if 'RESERVED_KEYWORD' in self.rules:
-            for alt in self.rules['RESERVED_KEYWORD'].alternatives:
+        if "RESERVED_KEYWORD" in self.rules:
+            for alt in self.rules["RESERVED_KEYWORD"].alternatives:
                 for elem in alt:
-                    if isinstance(elem, Terminal) and re.match(r'^[a-z]', elem.value):
+                    if isinstance(elem, Terminal) and re.match(r"^[a-z]", elem.value):
                         self.keywords.add(elem.value)
 
         # Extract operators from RESERVED_SYMBOL rule if present
-        if 'RESERVED_SYMBOL' in self.rules:
-            for alt in self.rules['RESERVED_SYMBOL'].alternatives:
+        if "RESERVED_SYMBOL" in self.rules:
+            for alt in self.rules["RESERVED_SYMBOL"].alternatives:
                 for elem in alt:
-                    if isinstance(elem, Terminal) and not re.match(r'^[a-zA-Z]', elem.value):
+                    if isinstance(elem, Terminal) and not re.match(
+                        r"^[a-zA-Z]", elem.value
+                    ):
                         self.operators.add(elem.value)
 
     def _collect_from_elements(self, elements: list):
         """Recursively collect terminals from a list of elements."""
         for elem in elements:
             if isinstance(elem, Terminal):
-                if re.match(r'^[a-zA-Z]', elem.value):
+                if re.match(r"^[a-zA-Z]", elem.value):
                     self.keywords.add(elem.value)
                 else:
                     self.operators.add(elem.value)
@@ -504,62 +527,62 @@ class Antlr4Transformer:
     def generate_lexer(self) -> str:
         """Generate the ANTLR4 lexer grammar."""
         lines = []
-        lines.append('/*')
-        lines.append(' * SysML v2.0 ANTLR4 Lexer Grammar')
-        lines.append(' * AUTO-GENERATED from official SysML v2 specification BNF')
-        lines.append(' * Do not edit manually — run: python scripts/grammar/generate_grammar.py')
-        lines.append(' */')
-        lines.append('')
-        lines.append('lexer grammar SysMLv2Lexer;')
-        lines.append('')
+        lines.append("/*")
+        lines.append(" * SysML v2.0 ANTLR4 Lexer Grammar")
+        lines.append(" * AUTO-GENERATED from official SysML v2 specification BNF")
+        lines.append(
+            " * Do not edit manually — run: python scripts/grammar/generate_grammar.py"
+        )
+        lines.append(" */")
+        lines.append("")
+        lines.append("lexer grammar SysMLv2Lexer;")
+        lines.append("")
 
         # Keywords (sorted alphabetically)
-        lines.append('// Keywords')
+        lines.append("// Keywords")
         sorted_keywords = sorted(self.keywords)
         for kw in sorted_keywords:
             token_name = self._keyword_to_token(kw)
             lines.append(f"{token_name} : '{kw}' ;")
-        lines.append('')
+        lines.append("")
 
         # Multi-character operators (sorted by length desc, then alphabetically)
-        lines.append('// Operators and punctuation')
+        lines.append("// Operators and punctuation")
         op_tokens = self._generate_operator_tokens()
         for token_name, pattern in op_tokens:
             escaped = self._escape_antlr(pattern)
             lines.append(f"{token_name} : '{escaped}' ;")
-        lines.append('')
+        lines.append("")
 
         # Identifier
-        lines.append('// Identifiers')
+        lines.append("// Identifiers")
         lines.append("IDENTIFIER : [a-zA-Z_] [a-zA-Z0-9_]* ;")
-        lines.append('')
+        lines.append("")
 
         # String literal
-        lines.append('// String literals')
-        lines.append(
-            "STRING : '\\'' ( '\\\\' . | ~['\\\\] )* '\\'' ;"
-        )
-        lines.append(
-            "DOUBLE_STRING : '\"' ( '\\\\' . | ~[\"\\\\] )* '\"' ;"
-        )
-        lines.append('')
+        lines.append("// String literals")
+        lines.append("STRING : '\\'' ( '\\\\' . | ~['\\\\] )* '\\'' ;")
+        lines.append("DOUBLE_STRING : '\"' ( '\\\\' . | ~[\"\\\\] )* '\"' ;")
+        lines.append("")
 
         # Numeric literals
-        lines.append('// Numeric literals')
-        lines.append('INTEGER : [0-9]+ ;')
-        lines.append("REAL : [0-9]* '.' [0-9]+ ( [eE] [+-]? [0-9]+ )? | [0-9]+ [eE] [+-]? [0-9]+ ;")
-        lines.append('')
+        lines.append("// Numeric literals")
+        lines.append("INTEGER : [0-9]+ ;")
+        lines.append(
+            "REAL : [0-9]* '.' [0-9]+ ( [eE] [+-]? [0-9]+ )? | [0-9]+ [eE] [+-]? [0-9]+ ;"
+        )
+        lines.append("")
 
         # Comments and whitespace
-        lines.append('// Comments')
+        lines.append("// Comments")
         lines.append("REGULAR_COMMENT : '/*' .*? '*/' ;")
         lines.append("SINGLE_LINE_NOTE : '//' ~[\\r\\n]* -> skip ;")
-        lines.append('')
+        lines.append("")
 
-        lines.append('// Whitespace')
-        lines.append('WS : [ \\t\\r\\n]+ -> skip ;')
+        lines.append("// Whitespace")
+        lines.append("WS : [ \\t\\r\\n]+ -> skip ;")
 
-        return '\n'.join(lines)
+        return "\n".join(lines)
 
     def generate_parser(self) -> str:
         """Generate the ANTLR4 parser grammar."""
@@ -569,37 +592,39 @@ class Antlr4Transformer:
         self._inline_map = {}  # Disabled: inlining causes stack overflow
 
         lines = []
-        lines.append('/*')
-        lines.append(' * SysML v2.0 ANTLR4 Parser Grammar')
-        lines.append(' * AUTO-GENERATED from official SysML v2 specification BNF')
-        lines.append(' * Do not edit manually — run: python scripts/grammar/generate_grammar.py')
-        lines.append(' */')
-        lines.append('')
-        lines.append('parser grammar SysMLv2;')
-        lines.append('')
-        lines.append('options {')
-        lines.append('    tokenVocab = SysMLv2Lexer;')
-        lines.append('}')
-        lines.append('')
+        lines.append("/*")
+        lines.append(" * SysML v2.0 ANTLR4 Parser Grammar")
+        lines.append(" * AUTO-GENERATED from official SysML v2 specification BNF")
+        lines.append(
+            " * Do not edit manually — run: python scripts/grammar/generate_grammar.py"
+        )
+        lines.append(" */")
+        lines.append("")
+        lines.append("parser grammar SysMLv2;")
+        lines.append("")
+        lines.append("options {")
+        lines.append("    tokenVocab = SysMLv2Lexer;")
+        lines.append("}")
+        lines.append("")
 
         # Generate expression rules with proper precedence
-        lines.append('// ===== Expression rules (precedence-climbing) =====')
-        lines.append('')
+        lines.append("// ===== Expression rules (precedence-climbing) =====")
+        lines.append("")
         lines.extend(self._generate_expression_rules())
-        lines.append('')
+        lines.append("")
 
         # Name rule: SysML v2 names can be identifiers or unrestricted (quoted) names
-        lines.append('// ===== Name rule (Identifier or UnrestrictedName) =====')
-        lines.append('')
-        lines.append('name')
-        lines.append('    : IDENTIFIER')
-        lines.append('    | STRING')
-        lines.append('    ;')
-        lines.append('')
+        lines.append("// ===== Name rule (Identifier or UnrestrictedName) =====")
+        lines.append("")
+        lines.append("name")
+        lines.append("    : IDENTIFIER")
+        lines.append("    | STRING")
+        lines.append("    ;")
+        lines.append("")
 
         # Generate all other parser rules
-        lines.append('// ===== Parser rules =====')
-        lines.append('')
+        lines.append("// ===== Parser rules =====")
+        lines.append("")
 
         expression_rules = self._get_expression_rule_names()
 
@@ -632,10 +657,10 @@ class Antlr4Transformer:
             antlr_name = self._to_parser_rule_name(name)
             rule_text = self._format_rule(rule)
             if rule_text:
-                lines.append(f'{antlr_name}')
-                lines.append(f'    : {rule_text}')
-                lines.append(f'    ;')
-                lines.append('')
+                lines.append(f"{antlr_name}")
+                lines.append(f"    : {rule_text}")
+                lines.append("    ;")
+                lines.append("")
 
         # Collect all referenced rule names and add stubs for undefined ones
         defined_rules = set()
@@ -644,15 +669,29 @@ class Antlr4Transformer:
 
         # Rules defined by expression generator
         expr_defined = {
-            'ownedExpression', 'typeReference', 'sequenceExpressionList',
-            'baseExpression', 'nullExpression', 'featureReferenceExpression',
-            'metadataAccessExpression', 'invocationExpression',
-            'constructorExpression', 'bodyExpression', 'argumentList',
-            'positionalArgumentList', 'namedArgumentList', 'namedArgument',
-            'literalExpression', 'literalBoolean', 'literalString',
-            'literalInteger', 'literalReal', 'literalInfinity',
-            'argumentMember', 'argumentExpressionMember',
-            'name',  # Defined above as IDENTIFIER | STRING
+            "ownedExpression",
+            "typeReference",
+            "sequenceExpressionList",
+            "baseExpression",
+            "nullExpression",
+            "featureReferenceExpression",
+            "metadataAccessExpression",
+            "invocationExpression",
+            "constructorExpression",
+            "bodyExpression",
+            "argumentList",
+            "positionalArgumentList",
+            "namedArgumentList",
+            "namedArgument",
+            "literalExpression",
+            "literalBoolean",
+            "literalString",
+            "literalInteger",
+            "literalReal",
+            "literalInfinity",
+            "argumentMember",
+            "argumentExpressionMember",
+            "name",  # Defined above as IDENTIFIER | STRING
         }
         defined_rules.update(expr_defined)
 
@@ -667,43 +706,49 @@ class Antlr4Transformer:
             if rule_text:
                 defined_rules.add(antlr_name)
                 # Scan for references
-                for ref_match in re.finditer(r'\b([a-z][a-zA-Z]+)\b', rule_text):
+                for ref_match in re.finditer(r"\b([a-z][a-zA-Z]+)\b", rule_text):
                     ref = ref_match.group(1)
                     # Skip ANTLR4 keywords and token names
-                    if ref not in ('assoc', 'right', 'left'):
+                    if ref not in ("assoc", "right", "left"):
                         referenced_rules.add(ref)
 
         undefined = referenced_rules - defined_rules
         # Filter out lexer tokens (all caps) and known expression-only rules
-        undefined = {r for r in undefined
-                     if not r.isupper()
-                     and r not in self.keywords
-                     and r not in {'empty'}}
+        undefined = {
+            r
+            for r in undefined
+            if not r.isupper() and r not in self.keywords and r not in {"empty"}
+        }
 
         if undefined:
-            lines.append('')
-            lines.append('// ===== Stub rules for undefined references =====')
-            lines.append('// These rules are referenced in the spec but not fully defined.')
-            lines.append('// They need manual review and completion.')
-            lines.append('')
+            lines.append("")
+            lines.append("// ===== Stub rules for undefined references =====")
+            lines.append(
+                "// These rules are referenced in the spec but not fully defined."
+            )
+            lines.append("// They need manual review and completion.")
+            lines.append("")
             # Known epsilon (empty) rules from the SysML v2 spec
             # These rules match nothing (empty alternative) in the official BNF
             epsilon_rules = {
-                'emptyActionUsage', 'emptyUsage', 'emptyFeature',
-                'emptyMultiplicity', 'emptyEndMember',
-                'portConjugation',  # Conjugated port definition is derived, not user-written
-                'emptyParameterMember',  # Empty parameter in transitions
+                "emptyActionUsage",
+                "emptyUsage",
+                "emptyFeature",
+                "emptyMultiplicity",
+                "emptyEndMember",
+                "portConjugation",  # Conjugated port definition is derived, not user-written
+                "emptyParameterMember",  # Empty parameter in transitions
             }
             for rule_name in sorted(undefined):
-                lines.append(f'{rule_name}')
+                lines.append(f"{rule_name}")
                 if rule_name in epsilon_rules:
-                    lines.append(f'    : /* epsilon */')
+                    lines.append("    : /* epsilon */")
                 else:
-                    lines.append(f'    : IDENTIFIER  /* TODO: stub for {rule_name} */')
-                lines.append(f'    ;')
-                lines.append('')
+                    lines.append(f"    : IDENTIFIER  /* TODO: stub for {rule_name} */")
+                lines.append("    ;")
+                lines.append("")
 
-        result = '\n'.join(lines)
+        result = "\n".join(lines)
 
         # Apply grammar patches for known BNF issues
         result = self._apply_grammar_patches(result)
@@ -716,7 +761,6 @@ class Antlr4Transformer:
         The SysML v2 BNF spec has some patterns that produce redundant keywords
         when flattened into an ANTLR4 grammar. These patches fix them.
         """
-        import re
 
         # Fix 1: entryTransitionMember has 'THEN targetSuccession' but
         # targetSuccession = sourceEndMember THEN connectorEndMember, where
@@ -725,10 +769,10 @@ class Antlr4Transformer:
         # (transitionSuccessionMember = emptyEndMember connectorEndMember, where
         # emptyEndMember is empty, so it just matches connectorEndMember)
         grammar = grammar.replace(
-            'entryTransitionMember\n'
-            '    : memberPrefix ( guardedTargetSuccession | THEN targetSuccession ) SEMI',
-            'entryTransitionMember\n'
-            '    : memberPrefix ( guardedTargetSuccession | THEN transitionSuccessionMember ) SEMI'
+            "entryTransitionMember\n"
+            "    : memberPrefix ( guardedTargetSuccession | THEN targetSuccession ) SEMI",
+            "entryTransitionMember\n"
+            "    : memberPrefix ( guardedTargetSuccession | THEN transitionSuccessionMember ) SEMI",
         )
 
         # Fix 2: defaultTargetSuccession has similar double-THEN issue.
@@ -740,17 +784,11 @@ class Antlr4Transformer:
         # Fix 3: satisfyRequirementUsage has ( NOT ) but NOT should be optional.
         # The KEBNF spec uses ( isNegated ?= 'not' ) without explicit ?, but the
         # ?= boolean assignment semantically implies optionality.
-        grammar = grammar.replace(
-            'ASSERT ( NOT ) SATISFY',
-            'ASSERT ( NOT )? SATISFY'
-        )
+        grammar = grammar.replace("ASSERT ( NOT ) SATISFY", "ASSERT ( NOT )? SATISFY")
 
         # Fix 4: libraryPackage has ( STANDARD ) but STANDARD should be optional.
         # Same ?= boolean assignment issue.
-        grammar = grammar.replace(
-            ': ( STANDARD ) LIBRARY',
-            ': ( STANDARD )? LIBRARY'
-        )
+        grammar = grammar.replace(": ( STANDARD ) LIBRARY", ": ( STANDARD )? LIBRARY")
 
         # Fix 5: importRule has visibilityIndicator as required, but it should
         # be optional. The KEBNF uses 'visibility = VisibilityIndicator' without
@@ -759,10 +797,8 @@ class Antlr4Transformer:
         # property assignment but doesn't infer optionality from the = operator.
         # In practice, 'import Foo::*;' is valid without a visibility prefix.
         grammar = grammar.replace(
-            'importRule\n'
-            '    : visibilityIndicator IMPORT',
-            'importRule\n'
-            '    : ( visibilityIndicator )? IMPORT'
+            "importRule\n    : visibilityIndicator IMPORT",
+            "importRule\n    : ( visibilityIndicator )? IMPORT",
         )
 
         # Fix 6: allocationDefinition is defined as a rule but not included in
@@ -770,11 +806,10 @@ class Antlr4Transformer:
         # spec (2025-12). AllocationUsage IS in StructureUsageElement, but
         # AllocationDefinition was not added to DefinitionElement.
         grammar = grammar.replace(
-            '    | metadataDefinition\n'
-            '    | extendedDefinition',
-            '    | metadataDefinition\n'
-            '    | allocationDefinition\n'
-            '    | extendedDefinition'
+            "    | metadataDefinition\n    | extendedDefinition",
+            "    | metadataDefinition\n"
+            "    | allocationDefinition\n"
+            "    | extendedDefinition",
         )
 
         # Fix 7: satisfyRequirementUsage requires 'assert' before 'satisfy' in
@@ -782,8 +817,7 @@ class Antlr4Transformer:
         # uses 'satisfy' without 'assert'. Make 'assert' optional for
         # backward compatibility with canonical examples.
         grammar = grammar.replace(
-            'ASSERT ( NOT )? SATISFY',
-            '( ASSERT ( NOT )? )? SATISFY'
+            "ASSERT ( NOT )? SATISFY", "( ASSERT ( NOT )? )? SATISFY"
         )
 
         # Fix 8: sendNode uses ActionUsageDeclaration? (no keyword) but the
@@ -791,10 +825,9 @@ class Antlr4Transformer:
         # AcceptNode uses ActionNodeUsageDeclaration? (with 'action' keyword)
         # via AcceptNodeDeclaration. Apply same pattern to sendNode.
         grammar = grammar.replace(
-            'sendNode\n'
-            '    : occurrenceUsagePrefix actionUsageDeclaration? SEND',
-            'sendNode\n'
-            '    : occurrenceUsagePrefix ( actionNodeUsageDeclaration | actionUsageDeclaration )? SEND'
+            "sendNode\n    : occurrenceUsagePrefix actionUsageDeclaration? SEND",
+            "sendNode\n"
+            "    : occurrenceUsagePrefix ( actionNodeUsageDeclaration | actionUsageDeclaration )? SEND",
         )
 
         # Fix 9: CaseBody (used by analysis, use case, etc.) does not include
@@ -803,23 +836,20 @@ class Antlr4Transformer:
         # Since analysis extends calculation in the SysML metamodel, add
         # returnParameterMember to caseBodyItem.
         grammar = grammar.replace(
-            'caseBodyItem\n'
-            '    : actionBodyItem\n'
-            '    | subjectMember',
-            'caseBodyItem\n'
-            '    : actionBodyItem\n'
-            '    | returnParameterMember\n'
-            '    | subjectMember'
+            "caseBodyItem\n    : actionBodyItem\n    | subjectMember",
+            "caseBodyItem\n"
+            "    : actionBodyItem\n"
+            "    | returnParameterMember\n"
+            "    | subjectMember",
         )
 
         # Fix 10: calculationUsageDeclaration is referenced but never defined in
         # the KEBNF spec. It's semantically identical to constraintUsageDeclaration
         # (= usageDeclaration valuePart?). Replace the stub.
         grammar = grammar.replace(
-            'calculationUsageDeclaration\n'
-            '    : IDENTIFIER  /* TODO: stub for calculationUsageDeclaration */',
-            'calculationUsageDeclaration\n'
-            '    : usageDeclaration valuePart?'
+            "calculationUsageDeclaration\n"
+            "    : IDENTIFIER  /* TODO: stub for calculationUsageDeclaration */",
+            "calculationUsageDeclaration\n    : usageDeclaration valuePart?",
         )
 
         # Fix 11: SLL mode ambiguity with qualifiedName | ownedFeatureChain.
@@ -836,85 +866,77 @@ class Antlr4Transformer:
         # This handles both simple names and dot-separated feature chains.
 
         # Pattern A: Rules with 'generalType | qualifiedName | ownedFeatureChain'
-        for rule_name in ['ownedSubsetting', 'ownedReferenceSubsetting',
-                          'ownedCrossSubsetting', 'ownedRedefinition',
-                          'ownedFeatureTyping']:
+        for rule_name in [
+            "ownedSubsetting",
+            "ownedReferenceSubsetting",
+            "ownedCrossSubsetting",
+            "ownedRedefinition",
+            "ownedFeatureTyping",
+        ]:
             grammar = grammar.replace(
-                f'{rule_name}\n'
-                f'    : generalType\n'
-                f'    | qualifiedName\n'
-                f'    | ownedFeatureChain\n'
-                f'    ;',
-                f'{rule_name}\n'
-                f'    : qualifiedName ( DOT qualifiedName )*\n'
-                f'    ;'
+                f"{rule_name}\n"
+                f"    : generalType\n"
+                f"    | qualifiedName\n"
+                f"    | ownedFeatureChain\n"
+                f"    ;",
+                f"{rule_name}\n    : qualifiedName ( DOT qualifiedName )*\n    ;",
             )
 
         # Pattern B: Rules with 'qualifiedName | ownedFeatureChain'
-        for rule_name in ['generalType', 'specificType', 'unioning',
-                          'intersecting', 'differencing',
-                          'ownedFeatureInverting']:
+        for rule_name in [
+            "generalType",
+            "specificType",
+            "unioning",
+            "intersecting",
+            "differencing",
+            "ownedFeatureInverting",
+        ]:
             grammar = grammar.replace(
-                f'{rule_name}\n'
-                f'    : qualifiedName\n'
-                f'    | ownedFeatureChain\n'
-                f'    ;',
-                f'{rule_name}\n'
-                f'    : qualifiedName ( DOT qualifiedName )*\n'
-                f'    ;'
+                f"{rule_name}\n    : qualifiedName\n    | ownedFeatureChain\n    ;",
+                f"{rule_name}\n    : qualifiedName ( DOT qualifiedName )*\n    ;",
             )
 
         # Pattern C: Rules with 'qualifiedName | featureChain'
-        for rule_name in ['ownedConjugation', 'ownedDisjoining']:
+        for rule_name in ["ownedConjugation", "ownedDisjoining"]:
             grammar = grammar.replace(
-                f'{rule_name}\n'
-                f'    : qualifiedName\n'
-                f'    | featureChain\n'
-                f'    ;',
-                f'{rule_name}\n'
-                f'    : qualifiedName ( DOT qualifiedName )*\n'
-                f'    ;'
+                f"{rule_name}\n    : qualifiedName\n    | featureChain\n    ;",
+                f"{rule_name}\n    : qualifiedName ( DOT qualifiedName )*\n    ;",
             )
 
         # Pattern D: featureChainMember has 3 alternatives that overlap
         grammar = grammar.replace(
-            'featureChainMember\n'
-            '    : featureReferenceMember\n'
-            '    | ownedFeatureChainMember\n'
-            '    | qualifiedName\n'
-            '    ;',
-            'featureChainMember\n'
-            '    : qualifiedName ( DOT qualifiedName )*\n'
-            '    ;'
+            "featureChainMember\n"
+            "    : featureReferenceMember\n"
+            "    | ownedFeatureChainMember\n"
+            "    | qualifiedName\n"
+            "    ;",
+            "featureChainMember\n    : qualifiedName ( DOT qualifiedName )*\n    ;",
         )
 
         # Pattern E: instantiatedTypeMember overlaps
         grammar = grammar.replace(
-            'instantiatedTypeMember\n'
-            '    : instantiatedTypeReference\n'
-            '    | ownedFeatureChainMember\n'
-            '    ;',
-            'instantiatedTypeMember\n'
-            '    : qualifiedName ( DOT qualifiedName )*\n'
-            '    ;'
+            "instantiatedTypeMember\n"
+            "    : instantiatedTypeReference\n"
+            "    | ownedFeatureChainMember\n"
+            "    ;",
+            "instantiatedTypeMember\n    : qualifiedName ( DOT qualifiedName )*\n    ;",
         )
 
         # Pattern F: Inline ( qualifiedName | featureChain ) in rules
         grammar = grammar.replace(
-            '( qualifiedName | featureChain )',
-            'qualifiedName ( DOT qualifiedName )*'
+            "( qualifiedName | featureChain )", "qualifiedName ( DOT qualifiedName )*"
         )
 
         # Pattern G: Inline ( qualifiedName | ownedFeatureChain ) in rules
         grammar = grammar.replace(
-            '( qualifiedName | ownedFeatureChain )',
-            'qualifiedName ( DOT qualifiedName )*'
+            "( qualifiedName | ownedFeatureChain )",
+            "qualifiedName ( DOT qualifiedName )*",
         )
 
         # Pattern H: chainingDeclaration's ( ownedFeatureChaining | featureChain )
         grammar = grammar.replace(
-            '( ownedFeatureChaining | featureChain )',
-            'qualifiedName ( DOT qualifiedName )*'
+            "( ownedFeatureChaining | featureChain )",
+            "qualifiedName ( DOT qualifiedName )*",
         )
 
         # Fix 12: flowEnd rule has ( ownedReferenceSubsetting DOT )? which
@@ -922,13 +944,11 @@ class Antlr4Transformer:
         # greedily, so the explicit DOT is never reached. flowEnd is
         # semantically a feature chain (prefix.flowFeature), so simplify it.
         grammar = grammar.replace(
-            'flowEnd\n'
-            '    : ( ownedReferenceSubsetting DOT )? flowFeatureMember\n'
-            '    | ( flowEndSubsetting )? flowFeatureMember\n'
-            '    ;',
-            'flowEnd\n'
-            '    : qualifiedName ( DOT qualifiedName )*\n'
-            '    ;'
+            "flowEnd\n"
+            "    : ( ownedReferenceSubsetting DOT )? flowFeatureMember\n"
+            "    | ( flowEndSubsetting )? flowFeatureMember\n"
+            "    ;",
+            "flowEnd\n    : qualifiedName ( DOT qualifiedName )*\n    ;",
         )
 
         return grammar
@@ -942,35 +962,68 @@ class Antlr4Transformer:
         """
         return {
             # Core expression chain (rewritten into ownedExpression)
-            'OwnedExpression', 'ConditionalExpression',
-            'ConditionalBinaryOperatorExpression', 'BinaryOperatorExpression',
-            'UnaryOperatorExpression', 'ClassificationExpression',
-            'MetaclassificationExpression', 'ExtentExpression',
-            'ConditionalBinaryOperator', 'BinaryOperator', 'UnaryOperator',
-            'ClassificationTestOperator', 'CastOperator',
-            'MetaclassificationTestOperator', 'MetaCastOperator',
-            'PrimaryExpression', 'NonFeatureChainPrimaryExpression',
-            'BracketExpression', 'IndexExpression', 'SequenceExpression',
-            'SelectExpression', 'CollectExpression',
-            'FunctionOperationExpression', 'FeatureChainExpression',
+            "OwnedExpression",
+            "ConditionalExpression",
+            "ConditionalBinaryOperatorExpression",
+            "BinaryOperatorExpression",
+            "UnaryOperatorExpression",
+            "ClassificationExpression",
+            "MetaclassificationExpression",
+            "ExtentExpression",
+            "ConditionalBinaryOperator",
+            "BinaryOperator",
+            "UnaryOperator",
+            "ClassificationTestOperator",
+            "CastOperator",
+            "MetaclassificationTestOperator",
+            "MetaCastOperator",
+            "PrimaryExpression",
+            "NonFeatureChainPrimaryExpression",
+            "BracketExpression",
+            "IndexExpression",
+            "SequenceExpression",
+            "SelectExpression",
+            "CollectExpression",
+            "FunctionOperationExpression",
+            "FeatureChainExpression",
             # Argument wrapper rules (inlined into expression helpers)
-            'ArgumentMember', 'Argument', 'ArgumentValue',
-            'ArgumentExpressionMember', 'ArgumentExpression',
-            'ArgumentExpressionValue',
-            'PrimaryArgumentMember', 'PrimaryArgument', 'PrimaryArgumentValue',
-            'NonFeatureChainPrimaryArgumentMember', 'NonFeatureChainPrimaryArgument',
-            'NonFeatureChainPrimaryArgumentValue',
-            'MetadataArgumentMember', 'MetadataArgument', 'MetadataValue',
-            'OwnedExpressionReferenceMember', 'OwnedExpressionReference',
+            "ArgumentMember",
+            "Argument",
+            "ArgumentValue",
+            "ArgumentExpressionMember",
+            "ArgumentExpression",
+            "ArgumentExpressionValue",
+            "PrimaryArgumentMember",
+            "PrimaryArgument",
+            "PrimaryArgumentValue",
+            "NonFeatureChainPrimaryArgumentMember",
+            "NonFeatureChainPrimaryArgument",
+            "NonFeatureChainPrimaryArgumentValue",
+            "MetadataArgumentMember",
+            "MetadataArgument",
+            "MetadataValue",
+            "OwnedExpressionReferenceMember",
+            "OwnedExpressionReference",
             # Expression helper rules emitted by _generate_expression_rules()
-            'TypeReference', 'SequenceExpressionList', 'BaseExpression',
-            'NullExpression', 'FeatureReferenceExpression',
-            'MetadataAccessExpression', 'InvocationExpression',
-            'ConstructorExpression', 'BodyExpression',
-            'ArgumentList', 'PositionalArgumentList', 'NamedArgumentList',
-            'NamedArgument',
-            'LiteralExpression', 'LiteralBoolean', 'LiteralString',
-            'LiteralInteger', 'LiteralReal', 'LiteralInfinity',
+            "TypeReference",
+            "SequenceExpressionList",
+            "BaseExpression",
+            "NullExpression",
+            "FeatureReferenceExpression",
+            "MetadataAccessExpression",
+            "InvocationExpression",
+            "ConstructorExpression",
+            "BodyExpression",
+            "ArgumentList",
+            "PositionalArgumentList",
+            "NamedArgumentList",
+            "NamedArgument",
+            "LiteralExpression",
+            "LiteralBoolean",
+            "LiteralString",
+            "LiteralInteger",
+            "LiteralReal",
+            "LiteralInfinity",
         }
 
     def _generate_expression_rules(self) -> List[str]:
@@ -983,151 +1036,163 @@ class Antlr4Transformer:
         lines = []
 
         # Main expression rule with precedence alternatives
-        lines.append('ownedExpression')
-        lines.append('    : IF ownedExpression QUESTION ownedExpression ELSE ownedExpression')
-        lines.append('    | ownedExpression QUESTION_QUESTION ownedExpression')
-        lines.append('    | ownedExpression IMPLIES ownedExpression')
-        lines.append('    | ownedExpression OR ownedExpression')
-        lines.append('    | ownedExpression AND ownedExpression')
-        lines.append('    | ownedExpression XOR ownedExpression')
+        lines.append("ownedExpression")
+        lines.append(
+            "    : IF ownedExpression QUESTION ownedExpression ELSE ownedExpression"
+        )
+        lines.append("    | ownedExpression QUESTION_QUESTION ownedExpression")
+        lines.append("    | ownedExpression IMPLIES ownedExpression")
+        lines.append("    | ownedExpression OR ownedExpression")
+        lines.append("    | ownedExpression AND ownedExpression")
+        lines.append("    | ownedExpression XOR ownedExpression")
         lines.append("    | ownedExpression PIPE ownedExpression")
         lines.append("    | ownedExpression AMP ownedExpression")
-        lines.append('    | ownedExpression ( EQ_EQ | BANG_EQ | EQ_EQ_EQ | BANG_EQ_EQ ) ownedExpression')
-        lines.append('    | ownedExpression ( LT | GT | LE | GE ) ownedExpression')
-        lines.append('    | ownedExpression DOT_DOT ownedExpression')
-        lines.append('    | ownedExpression ( PLUS | MINUS ) ownedExpression')
-        lines.append('    | ownedExpression ( STAR | SLASH | PERCENT ) ownedExpression')
-        lines.append('    | <assoc=right> ownedExpression ( STAR_STAR | CARET ) ownedExpression')
-        lines.append('    | ( PLUS | MINUS | TILDE | NOT ) ownedExpression')
-        lines.append('    | ( AT_SIGN | AT_AT ) typeReference')
-        lines.append('    | ownedExpression ( ISTYPE | HASTYPE | AT_SIGN ) typeReference')
-        lines.append('    | ownedExpression AS typeReference')
-        lines.append('    | ownedExpression AT_AT typeReference')
-        lines.append('    | ownedExpression META typeReference')
-        lines.append('    | ownedExpression LBRACK sequenceExpressionList? RBRACK')
-        lines.append('    | ownedExpression HASH LPAREN sequenceExpressionList? RPAREN')
-        lines.append('    | ownedExpression argumentList')
-        lines.append('    | ownedExpression DOT qualifiedName')
-        lines.append('    | ownedExpression DOT_QUESTION bodyExpression')
-        lines.append('    | ownedExpression ARROW qualifiedName ( bodyExpression | argumentList )')
-        lines.append('    | ALL typeReference')
-        lines.append('    | baseExpression')
-        lines.append('    ;')
-        lines.append('')
+        lines.append(
+            "    | ownedExpression ( EQ_EQ | BANG_EQ | EQ_EQ_EQ | BANG_EQ_EQ ) ownedExpression"
+        )
+        lines.append("    | ownedExpression ( LT | GT | LE | GE ) ownedExpression")
+        lines.append("    | ownedExpression DOT_DOT ownedExpression")
+        lines.append("    | ownedExpression ( PLUS | MINUS ) ownedExpression")
+        lines.append("    | ownedExpression ( STAR | SLASH | PERCENT ) ownedExpression")
+        lines.append(
+            "    | <assoc=right> ownedExpression ( STAR_STAR | CARET ) ownedExpression"
+        )
+        lines.append("    | ( PLUS | MINUS | TILDE | NOT ) ownedExpression")
+        lines.append("    | ( AT_SIGN | AT_AT ) typeReference")
+        lines.append(
+            "    | ownedExpression ( ISTYPE | HASTYPE | AT_SIGN ) typeReference"
+        )
+        lines.append("    | ownedExpression AS typeReference")
+        lines.append("    | ownedExpression AT_AT typeReference")
+        lines.append("    | ownedExpression META typeReference")
+        lines.append("    | ownedExpression LBRACK sequenceExpressionList? RBRACK")
+        lines.append("    | ownedExpression HASH LPAREN sequenceExpressionList? RPAREN")
+        lines.append("    | ownedExpression argumentList")
+        lines.append("    | ownedExpression DOT qualifiedName")
+        lines.append("    | ownedExpression DOT_QUESTION bodyExpression")
+        lines.append(
+            "    | ownedExpression ARROW qualifiedName ( bodyExpression | argumentList )"
+        )
+        lines.append("    | ALL typeReference")
+        lines.append("    | baseExpression")
+        lines.append("    ;")
+        lines.append("")
 
         # Type reference for classification/cast
-        lines.append('typeReference')
-        lines.append('    : qualifiedName')
-        lines.append('    ;')
-        lines.append('')
+        lines.append("typeReference")
+        lines.append("    : qualifiedName")
+        lines.append("    ;")
+        lines.append("")
 
         # Sequence expression (no empty alt — use sequenceExpressionList? at call sites)
-        lines.append('sequenceExpressionList')
-        lines.append('    : ownedExpression ( COMMA ownedExpression )*')
-        lines.append('    ;')
-        lines.append('')
+        lines.append("sequenceExpressionList")
+        lines.append("    : ownedExpression ( COMMA ownedExpression )*")
+        lines.append("    ;")
+        lines.append("")
 
         # Base expressions (non-recursive)
-        lines.append('baseExpression')
-        lines.append('    : nullExpression')
-        lines.append('    | literalExpression')
-        lines.append('    | featureReferenceExpression')
-        lines.append('    | metadataAccessExpression')
-        lines.append('    | invocationExpression')
-        lines.append('    | constructorExpression')
-        lines.append('    | bodyExpression')
-        lines.append('    | LPAREN sequenceExpressionList? RPAREN')
-        lines.append('    ;')
-        lines.append('')
+        lines.append("baseExpression")
+        lines.append("    : nullExpression")
+        lines.append("    | literalExpression")
+        lines.append("    | featureReferenceExpression")
+        lines.append("    | metadataAccessExpression")
+        lines.append("    | invocationExpression")
+        lines.append("    | constructorExpression")
+        lines.append("    | bodyExpression")
+        lines.append("    | LPAREN sequenceExpressionList? RPAREN")
+        lines.append("    ;")
+        lines.append("")
 
         # Null expression
-        lines.append('nullExpression')
-        lines.append('    : NULL')
-        lines.append('    | LPAREN RPAREN')
-        lines.append('    ;')
-        lines.append('')
+        lines.append("nullExpression")
+        lines.append("    : NULL")
+        lines.append("    | LPAREN RPAREN")
+        lines.append("    ;")
+        lines.append("")
 
         # Feature reference
-        lines.append('featureReferenceExpression')
-        lines.append('    : qualifiedName')
-        lines.append('    ;')
-        lines.append('')
+        lines.append("featureReferenceExpression")
+        lines.append("    : qualifiedName")
+        lines.append("    ;")
+        lines.append("")
 
         # Metadata access
-        lines.append('metadataAccessExpression')
-        lines.append('    : qualifiedName DOT METADATA')
-        lines.append('    ;')
-        lines.append('')
+        lines.append("metadataAccessExpression")
+        lines.append("    : qualifiedName DOT METADATA")
+        lines.append("    ;")
+        lines.append("")
 
         # Invocation
-        lines.append('invocationExpression')
-        lines.append('    : qualifiedName argumentList')
-        lines.append('    ;')
-        lines.append('')
+        lines.append("invocationExpression")
+        lines.append("    : qualifiedName argumentList")
+        lines.append("    ;")
+        lines.append("")
 
         # Constructor
-        lines.append('constructorExpression')
-        lines.append('    : NEW qualifiedName argumentList')
-        lines.append('    ;')
-        lines.append('')
+        lines.append("constructorExpression")
+        lines.append("    : NEW qualifiedName argumentList")
+        lines.append("    ;")
+        lines.append("")
 
         # Body expression
-        lines.append('bodyExpression')
-        lines.append('    : LBRACE functionBodyPart RBRACE')
-        lines.append('    ;')
-        lines.append('')
+        lines.append("bodyExpression")
+        lines.append("    : LBRACE functionBodyPart RBRACE")
+        lines.append("    ;")
+        lines.append("")
 
         # Argument list
-        lines.append('argumentList')
-        lines.append('    : LPAREN ( positionalArgumentList | namedArgumentList )? RPAREN')
-        lines.append('    ;')
-        lines.append('')
+        lines.append("argumentList")
+        lines.append(
+            "    : LPAREN ( positionalArgumentList | namedArgumentList )? RPAREN"
+        )
+        lines.append("    ;")
+        lines.append("")
 
-        lines.append('positionalArgumentList')
-        lines.append('    : ownedExpression ( COMMA ownedExpression )*')
-        lines.append('    ;')
-        lines.append('')
+        lines.append("positionalArgumentList")
+        lines.append("    : ownedExpression ( COMMA ownedExpression )*")
+        lines.append("    ;")
+        lines.append("")
 
-        lines.append('namedArgumentList')
-        lines.append('    : namedArgument ( COMMA namedArgument )*')
-        lines.append('    ;')
-        lines.append('')
+        lines.append("namedArgumentList")
+        lines.append("    : namedArgument ( COMMA namedArgument )*")
+        lines.append("    ;")
+        lines.append("")
 
-        lines.append('namedArgument')
-        lines.append('    : qualifiedName EQ ownedExpression')
-        lines.append('    ;')
-        lines.append('')
+        lines.append("namedArgument")
+        lines.append("    : qualifiedName EQ ownedExpression")
+        lines.append("    ;")
+        lines.append("")
 
         # Literal expressions
-        lines.append('literalExpression')
-        lines.append('    : literalBoolean')
-        lines.append('    | literalString')
-        lines.append('    | literalInteger')
-        lines.append('    | literalReal')
-        lines.append('    | literalInfinity')
-        lines.append('    ;')
-        lines.append('')
+        lines.append("literalExpression")
+        lines.append("    : literalBoolean")
+        lines.append("    | literalString")
+        lines.append("    | literalInteger")
+        lines.append("    | literalReal")
+        lines.append("    | literalInfinity")
+        lines.append("    ;")
+        lines.append("")
 
-        lines.append('literalBoolean : TRUE | FALSE ;')
-        lines.append('literalString : DOUBLE_STRING ;')
-        lines.append('literalInteger : INTEGER ;')
-        lines.append('literalReal : REAL ;')
-        lines.append('literalInfinity : STAR ;')
-        lines.append('')
+        lines.append("literalBoolean : TRUE | FALSE ;")
+        lines.append("literalString : DOUBLE_STRING ;")
+        lines.append("literalInteger : INTEGER ;")
+        lines.append("literalReal : REAL ;")
+        lines.append("literalInfinity : STAR ;")
+        lines.append("")
 
         # Argument wrapper rules — these are semantic wrapper chains in the
         # KEBNF that all ultimately resolve to an OwnedExpression:
         #   ArgumentMember → Argument → ArgumentValue → OwnedExpression
         #   ArgumentExpressionMember → ArgumentExpression → ArgumentExpressionValue
         #     → OwnedExpressionReference → OwnedExpressionMember → OwnedExpression
-        lines.append('argumentMember')
-        lines.append('    : ownedExpression')
-        lines.append('    ;')
-        lines.append('')
-        lines.append('argumentExpressionMember')
-        lines.append('    : ownedExpression')
-        lines.append('    ;')
-        lines.append('')
+        lines.append("argumentMember")
+        lines.append("    : ownedExpression")
+        lines.append("    ;")
+        lines.append("")
+        lines.append("argumentExpressionMember")
+        lines.append("    : ownedExpression")
+        lines.append("    ;")
+        lines.append("")
 
         return lines
 
@@ -1140,15 +1205,15 @@ class Antlr4Transformer:
         alternatives: (membershipImport | namespaceImportNonFilter) (filterPackageMember)+
         where namespaceImportNonFilter = qualifiedName '::' '*' ('::' '**')?
         """
-        if 'FilterPackage' not in self.rules:
+        if "FilterPackage" not in self.rules:
             return
 
-        rule = self.rules['FilterPackage']
+        rule = self.rules["FilterPackage"]
         new_alts = []
         for alt in rule.alternatives:
             # Check if this alt starts with ImportDeclaration or an import reference
             has_import_ref = any(
-                isinstance(e, NonTerminal) and e.name == 'ImportDeclaration'
+                isinstance(e, NonTerminal) and e.name == "ImportDeclaration"
                 for e in alt
             )
             if has_import_ref:
@@ -1156,10 +1221,12 @@ class Antlr4Transformer:
                 # ( membershipImport | namespaceImportDirect ) instead
                 new_elements = []
                 for e in alt:
-                    if isinstance(e, NonTerminal) and e.name == 'ImportDeclaration':
+                    if isinstance(e, NonTerminal) and e.name == "ImportDeclaration":
                         # Inline: (MembershipImport | NamespaceImportDirect)
                         # where NamespaceImportDirect is the non-FilterPackage alt of NamespaceImport
-                        new_elements.append(NonTerminal(name='FilterPackageImportDeclaration'))
+                        new_elements.append(
+                            NonTerminal(name="FilterPackageImportDeclaration")
+                        )
                     else:
                         new_elements.append(e)
                 new_alts.append(new_elements)
@@ -1170,27 +1237,27 @@ class Antlr4Transformer:
         # Create the helper rule FilterPackageImportDeclaration
         # which is ImportDeclaration minus the FilterPackage path
         helper = GrammarRule(
-            name='FilterPackageImportDeclaration',
+            name="FilterPackageImportDeclaration",
             parent_type=None,
             alternatives=[
-                [NonTerminal(name='MembershipImport')],
-                [NonTerminal(name='NamespaceImportDirect')],
+                [NonTerminal(name="MembershipImport")],
+                [NonTerminal(name="NamespaceImportDirect")],
             ],
             is_lexical=False,
-            source='generated'
+            source="generated",
         )
-        self.rules['FilterPackageImportDeclaration'] = helper
-        self.rule_order.append('FilterPackageImportDeclaration')
+        self.rules["FilterPackageImportDeclaration"] = helper
+        self.rule_order.append("FilterPackageImportDeclaration")
 
         # Create NamespaceImportDirect: the non-FilterPackage alternatives
         # from NamespaceImport
-        if 'NamespaceImport' in self.rules:
-            ns_rule = self.rules['NamespaceImport']
+        if "NamespaceImport" in self.rules:
+            ns_rule = self.rules["NamespaceImport"]
             direct_alts = []
             for alt in ns_rule.alternatives:
                 # Skip alternatives that reference FilterPackage
                 has_filter = any(
-                    isinstance(e, NonTerminal) and e.name == 'FilterPackage'
+                    isinstance(e, NonTerminal) and e.name == "FilterPackage"
                     for e in alt
                 )
                 if not has_filter:
@@ -1198,14 +1265,14 @@ class Antlr4Transformer:
 
             if direct_alts:
                 direct_rule = GrammarRule(
-                    name='NamespaceImportDirect',
+                    name="NamespaceImportDirect",
                     parent_type=None,
                     alternatives=direct_alts,
                     is_lexical=False,
-                    source='generated'
+                    source="generated",
                 )
-                self.rules['NamespaceImportDirect'] = direct_rule
-                self.rule_order.append('NamespaceImportDirect')
+                self.rules["NamespaceImportDirect"] = direct_rule
+                self.rule_order.append("NamespaceImportDirect")
             else:
                 # Fallback: all NamespaceImport alts use FilterPackage,
                 # just create MembershipImport as the only option
@@ -1241,7 +1308,7 @@ class Antlr4Transformer:
                     if isinstance(elem, NonTerminal):
                         inline_map[name] = elem.name
                     elif isinstance(elem, QualifiedNameRef):
-                        inline_map[name] = 'QualifiedName'
+                        inline_map[name] = "QualifiedName"
 
         # Resolve transitive chains
         changed = True
@@ -1313,14 +1380,14 @@ class Antlr4Transformer:
                 alt_texts.append(text)
                 seen.add(text)
             elif not text and not alt:  # Intentionally empty alternative
-                if '/* empty */' not in seen:
-                    alt_texts.append('/* empty */')
-                    seen.add('/* empty */')
+                if "/* empty */" not in seen:
+                    alt_texts.append("/* empty */")
+                    seen.add("/* empty */")
 
         if not alt_texts:
-            return ''
+            return ""
 
-        return '\n    | '.join(alt_texts)
+        return "\n    | ".join(alt_texts)
 
     def _format_sequence(self, elements: list) -> str:
         """Format a sequence of elements as ANTLR4 text."""
@@ -1329,7 +1396,7 @@ class Antlr4Transformer:
             text = self._format_element(elem)
             if text:
                 parts.append(text)
-        return ' '.join(parts)
+        return " ".join(parts)
 
     def _format_element(self, elem: RuleElement) -> str:
         """Format a single element as ANTLR4 text."""
@@ -1340,22 +1407,22 @@ class Antlr4Transformer:
             if self._is_lexer_rule_name(elem.name):
                 return self._lexer_rule_to_token(elem.name)
             # Check if this references a semantically empty rule
-            if hasattr(self, '_empty_rules') and elem.name in self._empty_rules:
-                return ''  # Drop reference to empty rule
+            if hasattr(self, "_empty_rules") and elem.name in self._empty_rules:
+                return ""  # Drop reference to empty rule
             # Apply pass-through inlining
             name = elem.name
-            if hasattr(self, '_inline_map') and name in self._inline_map:
+            if hasattr(self, "_inline_map") and name in self._inline_map:
                 name = self._inline_map[name]
             return self._to_parser_rule_name(name)
         elif isinstance(elem, QualifiedNameRef):
-            return 'qualifiedName'
+            return "qualifiedName"
         elif isinstance(elem, Repetition):
             inner = self._format_element(elem.child)
             if not inner:
-                return ''
+                return ""
             if isinstance(elem.child, Group):
-                return f'{inner}{elem.modifier}'
-            return f'{inner}{elem.modifier}'
+                return f"{inner}{elem.modifier}"
+            return f"{inner}{elem.modifier}"
         elif isinstance(elem, Group):
             alt_texts = []
             for alt in elem.alternatives:
@@ -1363,9 +1430,9 @@ class Antlr4Transformer:
                 if text:
                     alt_texts.append(text)
             if len(alt_texts) == 1:
-                return f'( {alt_texts[0]} )'
-            return '( ' + ' | '.join(alt_texts) + ' )'
-        return ''
+                return f"( {alt_texts[0]} )"
+            return "( " + " | ".join(alt_texts) + " )"
+        return ""
 
     def _is_lexer_rule_name(self, name: str) -> bool:
         """Check if a name is a lexer rule (ALL_CAPS or MIXED_CAPS pattern).
@@ -1376,7 +1443,7 @@ class Antlr4Transformer:
         if name in self.rules and self.rules[name].is_lexical:
             return True
         # If the name matches ALL_CAPS pattern (with underscores allowed)
-        if re.match(r'^[A-Z][A-Z_0-9]+$', name):
+        if re.match(r"^[A-Z][A-Z_0-9]+$", name):
             return True
         return False
 
@@ -1388,20 +1455,20 @@ class Antlr4Transformer:
         """
         # Map compound/alias lexer rules to actual tokens
         lexer_token_map = {
-            'NAME': 'name',
-            'STRING_VALUE': 'DOUBLE_STRING',
-            'DECIMAL_VALUE': 'INTEGER',
-            'EXPONENTIAL_VALUE': 'REAL',
-            'REGULAR_COMMENT': 'REGULAR_COMMENT',
+            "NAME": "name",
+            "STRING_VALUE": "DOUBLE_STRING",
+            "DECIMAL_VALUE": "INTEGER",
+            "EXPONENTIAL_VALUE": "REAL",
+            "REGULAR_COMMENT": "REGULAR_COMMENT",
             # Compound tokens: symbol OR keyword alternatives
-            'TYPED_BY': '( COLON | TYPED BY )',
-            'DEFINED_BY': '( COLON | DEFINED BY )',
-            'SPECIALIZES': '( COLON_GT | SPECIALIZES )',
-            'SUBSETS': '( COLON_GT | SUBSETS )',
-            'REFERENCES': '( COLON_COLON_GT | REFERENCES )',
-            'CROSSES': '( FAT_ARROW | CROSSES )',
-            'REDEFINES': '( COLON_GT_GT | REDEFINES )',
-            'CONJUGATES': '( TILDE | CONJUGATES )',
+            "TYPED_BY": "( COLON | TYPED BY )",
+            "DEFINED_BY": "( COLON | DEFINED BY )",
+            "SPECIALIZES": "( COLON_GT | SPECIALIZES )",
+            "SUBSETS": "( COLON_GT | SUBSETS )",
+            "REFERENCES": "( COLON_COLON_GT | REFERENCES )",
+            "CROSSES": "( FAT_ARROW | CROSSES )",
+            "REDEFINES": "( COLON_GT_GT | REDEFINES )",
+            "CONJUGATES": "( TILDE | CONJUGATES )",
         }
         if name in lexer_token_map:
             return lexer_token_map[name]
@@ -1413,69 +1480,134 @@ class Antlr4Transformer:
         if not name:
             return name
         # Special cases
-        if name == 'QualifiedName':
-            return 'qualifiedName'
+        if name == "QualifiedName":
+            return "qualifiedName"
         result = name[0].lower() + name[1:]
         # ANTLR4 reserved words that can't be used as rule names
         antlr_reserved = {
-            'import', 'fragment', 'lexer', 'parser', 'grammar',
-            'returns', 'locals', 'throws', 'catch', 'finally',
-            'mode', 'options', 'tokens', 'channels',
+            "import",
+            "fragment",
+            "lexer",
+            "parser",
+            "grammar",
+            "returns",
+            "locals",
+            "throws",
+            "catch",
+            "finally",
+            "mode",
+            "options",
+            "tokens",
+            "channels",
         }
         if result in antlr_reserved:
-            result = result + 'Rule'
+            result = result + "Rule"
         return result
 
     def _keyword_to_token(self, keyword: str) -> str:
         """Convert a keyword string to its ANTLR4 token name."""
-        return keyword.upper().replace(' ', '_')
+        return keyword.upper().replace(" ", "_")
 
     def _terminal_to_token(self, value: str) -> str:
         """Convert a terminal value to its ANTLR4 token reference."""
-        if re.match(r'^[a-zA-Z]', value):
-            return value.upper().replace(' ', '_')
+        if re.match(r"^[a-zA-Z]", value):
+            return value.upper().replace(" ", "_")
         # Operator tokens — names must not collide with keyword tokens
         token_map = {
-            ':': 'COLON', '::': 'COLON_COLON', ':>': 'COLON_GT',
-            ':>>': 'COLON_GT_GT', '::>': 'COLON_COLON_GT',
-            ':=': 'COLON_EQ',
-            ';': 'SEMI', ',': 'COMMA', '.': 'DOT', '..': 'DOT_DOT',
-            '.?': 'DOT_QUESTION',
-            '(': 'LPAREN', ')': 'RPAREN', '{': 'LBRACE', '}': 'RBRACE',
-            '[': 'LBRACK', ']': 'RBRACK', '<': 'LT', '>': 'GT',
-            '<=': 'LE', '>=': 'GE',
-            '=': 'EQ', '==': 'EQ_EQ', '!=': 'BANG_EQ',
-            '===': 'EQ_EQ_EQ', '!==': 'BANG_EQ_EQ',
-            '+': 'PLUS', '-': 'MINUS', '*': 'STAR', '/': 'SLASH',
-            '%': 'PERCENT', '^': 'CARET', '**': 'STAR_STAR',
-            '~': 'TILDE', '#': 'HASH', '$': 'DOLLAR',
-            '|': 'PIPE', '&': 'AMP',
-            '->': 'ARROW', '=>': 'FAT_ARROW',
-            '?': 'QUESTION', '??': 'QUESTION_QUESTION',
-            '@': 'AT_SIGN', '@@': 'AT_AT',
+            ":": "COLON",
+            "::": "COLON_COLON",
+            ":>": "COLON_GT",
+            ":>>": "COLON_GT_GT",
+            "::>": "COLON_COLON_GT",
+            ":=": "COLON_EQ",
+            ";": "SEMI",
+            ",": "COMMA",
+            ".": "DOT",
+            "..": "DOT_DOT",
+            ".?": "DOT_QUESTION",
+            "(": "LPAREN",
+            ")": "RPAREN",
+            "{": "LBRACE",
+            "}": "RBRACE",
+            "[": "LBRACK",
+            "]": "RBRACK",
+            "<": "LT",
+            ">": "GT",
+            "<=": "LE",
+            ">=": "GE",
+            "=": "EQ",
+            "==": "EQ_EQ",
+            "!=": "BANG_EQ",
+            "===": "EQ_EQ_EQ",
+            "!==": "BANG_EQ_EQ",
+            "+": "PLUS",
+            "-": "MINUS",
+            "*": "STAR",
+            "/": "SLASH",
+            "%": "PERCENT",
+            "^": "CARET",
+            "**": "STAR_STAR",
+            "~": "TILDE",
+            "#": "HASH",
+            "$": "DOLLAR",
+            "|": "PIPE",
+            "&": "AMP",
+            "->": "ARROW",
+            "=>": "FAT_ARROW",
+            "?": "QUESTION",
+            "??": "QUESTION_QUESTION",
+            "@": "AT_SIGN",
+            "@@": "AT_AT",
         }
         return token_map.get(value, f"'{self._escape_antlr(value)}'")
 
     def _generate_operator_tokens(self) -> List[Tuple[str, str]]:
         """Generate token definitions for operators, sorted longest first."""
         token_map = {
-            ':>>': 'COLON_GT_GT', '::>': 'COLON_COLON_GT',
-            '===': 'EQ_EQ_EQ', '!==': 'BANG_EQ_EQ',
-            '**': 'STAR_STAR', '??': 'QUESTION_QUESTION',
-            '::': 'COLON_COLON', ':>': 'COLON_GT', ':=': 'COLON_EQ',
-            '..': 'DOT_DOT', '.?': 'DOT_QUESTION',
-            '->': 'ARROW', '=>': 'FAT_ARROW',
-            '==': 'EQ_EQ', '!=': 'BANG_EQ',
-            '<=': 'LE', '>=': 'GE',
-            '@@': 'AT_AT',
-            ':': 'COLON', ';': 'SEMI', ',': 'COMMA', '.': 'DOT',
-            '(': 'LPAREN', ')': 'RPAREN', '{': 'LBRACE', '}': 'RBRACE',
-            '[': 'LBRACK', ']': 'RBRACK', '<': 'LT', '>': 'GT',
-            '=': 'EQ', '+': 'PLUS', '-': 'MINUS', '*': 'STAR',
-            '/': 'SLASH', '%': 'PERCENT', '^': 'CARET',
-            '~': 'TILDE', '#': 'HASH', '$': 'DOLLAR',
-            '|': 'PIPE', '&': 'AMP',
-            '?': 'QUESTION', '@': 'AT_SIGN',
+            ":>>": "COLON_GT_GT",
+            "::>": "COLON_COLON_GT",
+            "===": "EQ_EQ_EQ",
+            "!==": "BANG_EQ_EQ",
+            "**": "STAR_STAR",
+            "??": "QUESTION_QUESTION",
+            "::": "COLON_COLON",
+            ":>": "COLON_GT",
+            ":=": "COLON_EQ",
+            "..": "DOT_DOT",
+            ".?": "DOT_QUESTION",
+            "->": "ARROW",
+            "=>": "FAT_ARROW",
+            "==": "EQ_EQ",
+            "!=": "BANG_EQ",
+            "<=": "LE",
+            ">=": "GE",
+            "@@": "AT_AT",
+            ":": "COLON",
+            ";": "SEMI",
+            ",": "COMMA",
+            ".": "DOT",
+            "(": "LPAREN",
+            ")": "RPAREN",
+            "{": "LBRACE",
+            "}": "RBRACE",
+            "[": "LBRACK",
+            "]": "RBRACK",
+            "<": "LT",
+            ">": "GT",
+            "=": "EQ",
+            "+": "PLUS",
+            "-": "MINUS",
+            "*": "STAR",
+            "/": "SLASH",
+            "%": "PERCENT",
+            "^": "CARET",
+            "~": "TILDE",
+            "#": "HASH",
+            "$": "DOLLAR",
+            "|": "PIPE",
+            "&": "AMP",
+            "?": "QUESTION",
+            "@": "AT_SIGN",
         }
         # Sort by length descending (ANTLR4 needs longest match first)
         items = sorted(token_map.items(), key=lambda x: (-len(x[0]), x[0]))
@@ -1483,58 +1615,69 @@ class Antlr4Transformer:
 
     def _escape_antlr(self, s: str) -> str:
         """Escape a string for ANTLR4."""
-        return s.replace('\\', '\\\\').replace("'", "\\'")
+        return s.replace("\\", "\\\\").replace("'", "\\'")
 
 
 # ---------------------------------------------------------------------------
 # Download
 # ---------------------------------------------------------------------------
 
+
 def download_bnf(config: dict, cache_dir: Optional[str] = None) -> Tuple[str, str]:
     """Download .kebnf files from GitHub. Returns (kerml_content, sysml_content)."""
     import requests
 
-    tag = config['release_tag']
-    repo = config['release_repo']
+    tag = config["release_tag"]
+    repo = config["release_repo"]
 
     results = {}
-    for key, path in config['bnf_files'].items():
-        url = f'https://raw.githubusercontent.com/{repo}/{tag}/{path}'
+    for key, path in config["bnf_files"].items():
+        url = f"https://raw.githubusercontent.com/{repo}/{tag}/{path}"
 
         # Check cache first
         if cache_dir:
-            cache_path = Path(cache_dir) / f'{key}-{tag}.kebnf'
+            cache_path = Path(cache_dir) / f"{key}-{tag}.kebnf"
             if cache_path.exists():
-                print(f'  Using cached {key} from {cache_path}')
+                print(f"  Using cached {key} from {cache_path}")
                 results[key] = cache_path.read_text()
                 continue
 
-        print(f'  Downloading {key} from {url}...')
+        print(f"  Downloading {key} from {url}...")
         resp = requests.get(url, timeout=30)
         resp.raise_for_status()
         content = resp.text
 
         if cache_dir:
-            cache_path = Path(cache_dir) / f'{key}-{tag}.kebnf'
+            cache_path = Path(cache_dir) / f"{key}-{tag}.kebnf"
             cache_path.parent.mkdir(parents=True, exist_ok=True)
             cache_path.write_text(content)
 
         results[key] = content
 
-    return results['kerml'], results['sysml']
+    return results["kerml"], results["sysml"]
 
 
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
+
 def main():
-    parser_arg = argparse.ArgumentParser(description='Generate ANTLR4 grammar from SysML v2 BNF')
-    parser_arg.add_argument('--tag', help='Release tag (e.g., 2025-12)')
-    parser_arg.add_argument('--output-dir', help='Output directory for .g4 files', default=None)
-    parser_arg.add_argument('--cache', action='store_true', help='Cache downloaded files')
-    parser_arg.add_argument('--config', help='Path to config.json',
-                           default=os.path.join(os.path.dirname(__file__), 'config.json'))
+    parser_arg = argparse.ArgumentParser(
+        description="Generate ANTLR4 grammar from SysML v2 BNF"
+    )
+    parser_arg.add_argument("--tag", help="Release tag (e.g., 2025-12)")
+    parser_arg.add_argument(
+        "--output-dir", help="Output directory for .g4 files", default=None
+    )
+    parser_arg.add_argument(
+        "--cache", action="store_true", help="Cache downloaded files"
+    )
+    parser_arg.add_argument(
+        "--config",
+        help="Path to config.json",
+        default=os.path.join(os.path.dirname(__file__), "config.json"),
+    )
     args = parser_arg.parse_args()
 
     # Load config
@@ -1543,69 +1686,76 @@ def main():
         config = json.load(f)
 
     if args.tag:
-        config['release_tag'] = args.tag
+        config["release_tag"] = args.tag
 
     # Validate release tag to prevent path traversal and URL injection
-    tag = config['release_tag']
-    if not re.match(r'^[a-zA-Z0-9._-]+$', tag):
-        print(f'Error: invalid release tag: {tag!r}', file=sys.stderr)
-        print('Tags must contain only alphanumeric characters, dots, hyphens, and underscores.', file=sys.stderr)
+    tag = config["release_tag"]
+    if not re.match(r"^[a-zA-Z0-9._-]+$", tag):
+        print(f"Error: invalid release tag: {tag!r}", file=sys.stderr)
+        print(
+            "Tags must contain only alphanumeric characters, dots, hyphens, and underscores.",
+            file=sys.stderr,
+        )
         sys.exit(1)
-    config['release_tag'] = tag
+    config["release_tag"] = tag
 
     # Determine paths – config.json lives at scripts/config.json,
     # so project_root is one level up from scripts/.
     project_root = config_path.parent.parent
-    output_dir = Path(args.output_dir) if args.output_dir else project_root / 'grammar'
-    cache_dir = project_root / '.grammar-cache' if args.cache else None
+    output_dir = Path(args.output_dir) if args.output_dir else project_root / "grammar"
+    cache_dir = project_root / ".grammar-cache" if args.cache else None
 
-    print(f'SysML v2 ANTLR4 Grammar Generator')
-    print(f'  Release tag: {config["release_tag"]}')
-    print(f'  Output dir:  {output_dir}')
+    print("SysML v2 ANTLR4 Grammar Generator")
+    print(f"  Release tag: {config['release_tag']}")
+    print(f"  Output dir:  {output_dir}")
     print()
 
     # Step 1: Download
-    print('Step 1: Downloading .kebnf files...')
+    print("Step 1: Downloading .kebnf files...")
     kerml_content, sysml_content = download_bnf(config, cache_dir)
-    print(f'  KerML: {len(kerml_content)} bytes')
-    print(f'  SysML: {len(sysml_content)} bytes')
+    print(f"  KerML: {len(kerml_content)} bytes")
+    print(f"  SysML: {len(sysml_content)} bytes")
     print()
 
     # Step 2: Parse
-    print('Step 2: Parsing .kebnf files...')
+    print("Step 2: Parsing .kebnf files...")
     kebnf_parser = KebnfParser()
-    kebnf_parser.parse_file(kerml_content, 'kerml')
-    kebnf_parser.parse_file(sysml_content, 'sysml')
-    print(f'  Total rules: {len(kebnf_parser.rules)}')
-    print(f'  Lexical rules: {sum(1 for r in kebnf_parser.rules.values() if r.is_lexical)}')
-    print(f'  Parser rules: {sum(1 for r in kebnf_parser.rules.values() if not r.is_lexical)}')
+    kebnf_parser.parse_file(kerml_content, "kerml")
+    kebnf_parser.parse_file(sysml_content, "sysml")
+    print(f"  Total rules: {len(kebnf_parser.rules)}")
+    print(
+        f"  Lexical rules: {sum(1 for r in kebnf_parser.rules.values() if r.is_lexical)}"
+    )
+    print(
+        f"  Parser rules: {sum(1 for r in kebnf_parser.rules.values() if not r.is_lexical)}"
+    )
     print()
 
     # Step 3: Transform
-    print('Step 3: Transforming to ANTLR4...')
+    print("Step 3: Transforming to ANTLR4...")
     transformer = Antlr4Transformer(kebnf_parser.rules, kebnf_parser.rule_order)
-    print(f'  Keywords found: {len(transformer.keywords)}')
-    print(f'  Operators found: {len(transformer.operators)}')
+    print(f"  Keywords found: {len(transformer.keywords)}")
+    print(f"  Operators found: {len(transformer.operators)}")
     print()
 
     # Step 4: Generate
-    print('Step 4: Generating .g4 files...')
+    print("Step 4: Generating .g4 files...")
     output_dir.mkdir(parents=True, exist_ok=True)
 
     lexer_grammar = transformer.generate_lexer()
     parser_grammar = transformer.generate_parser()
 
-    lexer_path = output_dir / config['output']['lexer_grammar'].split('/')[-1]
-    parser_path = output_dir / config['output']['parser_grammar'].split('/')[-1]
+    lexer_path = output_dir / config["output"]["lexer_grammar"].split("/")[-1]
+    parser_path = output_dir / config["output"]["parser_grammar"].split("/")[-1]
 
     lexer_path.write_text(lexer_grammar)
     parser_path.write_text(parser_grammar)
 
-    print(f'  Lexer:  {lexer_path} ({len(lexer_grammar)} bytes)')
-    print(f'  Parser: {parser_path} ({len(parser_grammar)} bytes)')
+    print(f"  Lexer:  {lexer_path} ({len(lexer_grammar)} bytes)")
+    print(f"  Parser: {parser_path} ({len(parser_grammar)} bytes)")
     print()
-    print('Done! Grammar files written to the grammar/ directory.')
+    print("Done! Grammar files written to the grammar/ directory.")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
