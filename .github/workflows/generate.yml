@@ -50,7 +50,7 @@ jobs:
         with:
           name: sysml-v2-grammar-${{ steps.meta.outputs.tag }}
           path: |
-            grammar/SysMLv2.g4
+            grammar/SysMLv2Parser.g4
             grammar/SysMLv2Lexer.g4
             grammar/SysMLv2Lexer.tokens
           if-no-files-found: error
@@ -185,7 +185,7 @@ jobs:
             (tag `${{ steps.meta.outputs.tag }}`).
 
             ### Files
-            - **SysMLv2.g4** — Parser grammar
+            - **SysMLv2Parser.g4** — Parser grammar
             - **SysMLv2Lexer.g4** — Lexer grammar
             - **SysMLv2Lexer.tokens** — Token definitions
 
@@ -194,7 +194,7 @@ jobs:
             for a ready-to-submit contribution to
             [antlr/grammars-v4](https://github.com/antlr/grammars-v4).
           files: |
-            grammar/SysMLv2.g4
+            grammar/SysMLv2Parser.g4
             grammar/SysMLv2Lexer.g4
             grammar/SysMLv2Lexer.tokens
           fail_on_unmatched_files: true
