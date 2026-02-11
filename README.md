@@ -6,15 +6,39 @@ specification grammar (KEBNF format).
 
 ## Quick Start
 
+### Devcontainer (recommended)
+
+Open in GitHub Codespaces or VS Code Dev Containers — everything is pre-installed
+and ready via the `postCreateCommand`.
+
+### Manual Setup
+
 ```bash
-# Install Python dependencies
-pip install -r scripts/requirements.txt
+# Install runtime + dev dependencies (ruff, yamllint, actionlint, pip-audit)
+make install-dev
 
-# Generate grammar from the OMG spec (downloads KEBNF automatically)
-python scripts/generate_grammar.py
+# Download and SHA256-verify the ANTLR4 JAR
+make download-antlr
+```
 
-# Or specify a different release tag
-python scripts/generate_grammar.py --tag 2025-12
+### Common Commands
+
+```bash
+make generate          # Regenerate grammar from the OMG spec
+make validate          # Compile grammar with ANTLR4 (Java target)
+make validate-ts       # Compile grammar with ANTLR4 (TypeScript target)
+make parse-examples    # Parse example .sysml files through the grammar
+make lint              # Run all linters (ruff, yamllint, actionlint)
+make audit             # Scan Python dependencies for known CVEs
+make format            # Auto-format Python scripts
+make ci                # Run full CI pipeline locally
+make help              # Show all available targets
+```
+
+### Generating for a Specific Release
+
+```bash
+make generate TAG=2025-12
 ```
 
 The generated `.g4` files are written to `grammar/`.
@@ -35,9 +59,9 @@ The generated `.g4` files are written to `grammar/`.
 ├── examples/
 │   ├── vehicle-model.sysml
 │   ├── toaster-system.sysml
-│   └── Camera.sysml
+│   └── camera.sysml
 └── .github/workflows/
-    ├── generate.yml          # CI: regenerate + validate grammar
+    ├── generate.yml          # CI: regenerate, validate, release
     └── watch-upstream.yml    # Cron: detect new OMG releases
 ```
 
@@ -64,21 +88,49 @@ The generated `.g4` files are written to `grammar/`.
 ## Using with ANTLR4
 
 ### Java
+
 ```bash
-java -jar antlr-4.13.2-complete.jar -Dlanguage=Java grammar/SysMLv2Lexer.g4 grammar/SysMLv2.g4
+make download-antlr
+make validate
+```
+
+Or directly:
+
+```bash
+java -jar /tmp/antlr4.jar -Dlanguage=Java \
+  grammar/SysMLv2Lexer.g4 grammar/SysMLv2.g4
 ```
 
 ### TypeScript
+
 ```bash
-java -jar antlr-4.13.2-complete.jar -Dlanguage=TypeScript -visitor -no-listener \
+make validate-ts
+```
+
+Or with post-processing for CommonJS compatibility:
+
+```bash
+java -jar /tmp/antlr4.jar -Dlanguage=TypeScript -visitor -no-listener \
   grammar/SysMLv2Lexer.g4 grammar/SysMLv2.g4
-node scripts/postprocess-antlr.js  # Fix CommonJS compatibility
+node scripts/postprocess-antlr.js
 ```
 
 ### Python
+
 ```bash
-java -jar antlr-4.13.2-complete.jar -Dlanguage=Python3 grammar/SysMLv2Lexer.g4 grammar/SysMLv2.g4
+java -jar /tmp/antlr4.jar -Dlanguage=Python3 \
+  grammar/SysMLv2Lexer.g4 grammar/SysMLv2.g4
 ```
+
+## CI / CD
+
+The `generate.yml` workflow runs on every push and PR to `main`:
+
+1. **Regenerate** — checks grammar hasn't drifted from the generator output
+2. **Validate** — compiles with ANTLR4 (Java + TypeScript targets)
+3. **Parse examples** — runs all `.sysml` files through the grammar
+4. **Release** — publishes a GitHub Release with versioned grammar artifacts
+   (main branch only)
 
 ## Upstream Tracking
 
