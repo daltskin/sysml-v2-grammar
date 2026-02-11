@@ -1,0 +1,35 @@
+{
+  "name": "SysML v2 Grammar",
+  "image": "mcr.microsoft.com/devcontainers/python:1-3.12",
+
+  "features": {
+    "ghcr.io/devcontainers/features/java:1": {
+      "version": "17",
+      "installMaven": "false",
+      "installGradle": "false"
+    },
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "20"
+    }
+  },
+
+  "postCreateCommand": "pip install --upgrade pip && make install-dev && make download-antlr",
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "charliermarsh.ruff",
+        "redhat.vscode-yaml",
+        "mike-lischke.vscode-antlr4"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "/usr/local/bin/python",
+        "[python]": {
+          "editor.defaultFormatter": "charliermarsh.ruff",
+          "editor.formatOnSave": true
+        },
+        "editor.rulers": [120]
+      }
+    }
+  }
+}
