@@ -1545,6 +1545,14 @@ def main():
     if args.tag:
         config['release_tag'] = args.tag
 
+    # Validate release tag to prevent path traversal and URL injection
+    tag = config['release_tag']
+    if not re.match(r'^[a-zA-Z0-9._-]+$', tag):
+        print(f'Error: invalid release tag: {tag!r}', file=sys.stderr)
+        print('Tags must contain only alphanumeric characters, dots, hyphens, and underscores.', file=sys.stderr)
+        sys.exit(1)
+    config['release_tag'] = tag
+
     # Determine paths – config.json lives at scripts/config.json,
     # so project_root is one level up from scripts/.
     project_root = config_path.parent.parent
