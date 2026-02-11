@@ -97,7 +97,7 @@ make validate
 Or directly:
 
 ```bash
-java -jar /tmp/antlr4.jar -Dlanguage=Java \
+java -jar .build/antlr4.jar -Dlanguage=Java \
   grammar/SysMLv2Lexer.g4 grammar/SysMLv2.g4
 ```
 
@@ -110,7 +110,7 @@ make validate-ts
 Or with post-processing for CommonJS compatibility:
 
 ```bash
-java -jar /tmp/antlr4.jar -Dlanguage=TypeScript -visitor -no-listener \
+java -jar .build/antlr4.jar -Dlanguage=TypeScript -visitor -no-listener \
   grammar/SysMLv2Lexer.g4 grammar/SysMLv2.g4
 node scripts/postprocess-antlr.js
 ```
@@ -118,7 +118,7 @@ node scripts/postprocess-antlr.js
 ### Python
 
 ```bash
-java -jar /tmp/antlr4.jar -Dlanguage=Python3 \
+java -jar .build/antlr4.jar -Dlanguage=Python3 \
   grammar/SysMLv2Lexer.g4 grammar/SysMLv2.g4
 ```
 
@@ -142,6 +142,38 @@ a pull request with regenerated grammar files.
 
 - **Release**: `2025-12`
 - **Source**: [Systems-Modeling/SysML-v2-Release](https://github.com/Systems-Modeling/SysML-v2-Release/tree/2025-12)
+
+## Contributing to grammars-v4
+
+This repo automates the creation of a ready-to-submit contribution for
+[antlr/grammars-v4](https://github.com/antlr/grammars-v4).
+
+```bash
+make contrib           # Build contribution directory → contrib/sysml/sysmlv2/
+make contrib-verify    # Build + verify all grammars-v4 requirements
+```
+
+The `contrib` target generates:
+
+| File | Purpose |
+|------|---------|
+| `SysMLv2.g4` | Parser grammar — EOF-patched, antlr-formatted |
+| `SysMLv2Lexer.g4` | Lexer grammar — antlr-formatted |
+| `pom.xml` | Maven test configuration |
+| `desc.xml` | trgen test descriptor |
+| `README.md` | Documentation with source references |
+| `examples/*.sysml` | Test input files |
+
+The CI pipeline builds and verifies the contribution on every push, and attaches
+a `grammars-v4-sysmlv2-<tag>` artifact to each GitHub Release.
+
+To submit a PR:
+
+1. Fork [antlr/grammars-v4](https://github.com/antlr/grammars-v4)
+2. Copy `contrib/sysml/sysmlv2/` into your fork
+3. Add `<module>sysml/sysmlv2</module>` to the root `pom.xml`
+4. Run `cd sysml/sysmlv2 && mvn clean test`
+5. Open a PR against `antlr/grammars-v4:master`
 
 ## Related Projects
 

@@ -8,6 +8,12 @@ venv/
 # Grammar cache
 .grammar-cache/
 
+# Build output
+.build/
+
+# ANTLR4 VS Code extension
+grammar/.antlr/
+
 # Linter cache
 .ruff_cache/
 
@@ -15,6 +21,9 @@ venv/
 .vscode/
 .idea/
 *.swp
+
+# Contribution output
+contrib/
 
 # OS
 .DS_Store

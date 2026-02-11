@@ -89,16 +89,69 @@ jobs:
       - name: Parse example files
         run: make parse-examples
 
+  contrib:
+    name: Build grammars-v4 Contribution
+    runs-on: ubuntu-latest
+    needs: [generate, validate, parse-examples]
+
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0
+        with:
+          python-version: '3.12'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4.4.0
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: make install
+
+      - name: Build and verify contribution
+        run: make contrib-verify
+
+      - name: Read release tag
+        id: meta
+        run: |
+          TAG=$(jq -r '.release_tag' scripts/config.json)
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Upload contribution artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        with:
+          name: grammars-v4-sysmlv2-${{ steps.meta.outputs.tag }}
+          path: contrib/sysml/sysmlv2/
+          if-no-files-found: error
+
   release:
     name: Publish GitHub Release
     runs-on: ubuntu-latest
-    needs: [generate, validate, parse-examples]
+    needs: [generate, validate, parse-examples, contrib]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:
       contents: write
 
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0
+        with:
+          python-version: '3.12'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4.4.0
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: make install
+
+      - name: Build contribution
+        run: make contrib
 
       - name: Read release tag
         id: meta
@@ -135,6 +188,11 @@ jobs:
             - **SysMLv2.g4** — Parser grammar
             - **SysMLv2Lexer.g4** — Lexer grammar
             - **SysMLv2Lexer.tokens** — Token definitions
+
+            ### grammars-v4 Contribution
+            Download the `grammars-v4-sysmlv2-${{ steps.meta.outputs.tag }}` artifact
+            for a ready-to-submit contribution to
+            [antlr/grammars-v4](https://github.com/antlr/grammars-v4).
           files: |
             grammar/SysMLv2.g4
             grammar/SysMLv2Lexer.g4

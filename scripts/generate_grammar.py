@@ -453,9 +453,10 @@ POSTFIX_OPERATORS = [".", ".?", "->", "#", "["]
 class Antlr4Transformer:
     """Transforms parsed .kebnf rules into ANTLR4 grammar strings."""
 
-    def __init__(self, rules: Dict[str, GrammarRule], rule_order: List[str]):
+    def __init__(self, rules: Dict[str, GrammarRule], rule_order: List[str], release_tag: str = ""):
         self.rules = rules
         self.rule_order = rule_order
+        self.release_tag = release_tag
         self.keywords: Set[str] = set()
         self.operators: Set[str] = set()
         self._collect_terminals()
@@ -529,7 +530,7 @@ class Antlr4Transformer:
         lines = []
         lines.append("/*")
         lines.append(" * SysML v2.0 ANTLR4 Lexer Grammar")
-        lines.append(" * AUTO-GENERATED from official SysML v2 specification BNF")
+        lines.append(f" * AUTO-GENERATED from official SysML v2 specification BNF (release {self.release_tag})")
         lines.append(
             " * Do not edit manually — run: python scripts/grammar/generate_grammar.py"
         )
@@ -594,7 +595,7 @@ class Antlr4Transformer:
         lines = []
         lines.append("/*")
         lines.append(" * SysML v2.0 ANTLR4 Parser Grammar")
-        lines.append(" * AUTO-GENERATED from official SysML v2 specification BNF")
+        lines.append(f" * AUTO-GENERATED from official SysML v2 specification BNF (release {self.release_tag})")
         lines.append(
             " * Do not edit manually — run: python scripts/grammar/generate_grammar.py"
         )
@@ -2192,7 +2193,7 @@ def main():
 
     # Step 3: Transform
     print("Step 3: Transforming to ANTLR4...")
-    transformer = Antlr4Transformer(kebnf_parser.rules, kebnf_parser.rule_order)
+    transformer = Antlr4Transformer(kebnf_parser.rules, kebnf_parser.rule_order, config["release_tag"])
     print(f"  Keywords found: {len(transformer.keywords)}")
     print(f"  Operators found: {len(transformer.operators)}")
     print()

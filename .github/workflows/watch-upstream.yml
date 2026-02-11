@@ -92,8 +92,8 @@ jobs:
           make generate TAG="$LATEST"
 
           # Update config.json with new tag
-          jq --arg tag "$LATEST" '.release_tag = $tag' scripts/config.json > /tmp/config.json
-          mv /tmp/config.json scripts/config.json
+          jq --arg tag "$LATEST" '.release_tag = $tag' scripts/config.json > scripts/config.json.tmp
+          mv scripts/config.json.tmp scripts/config.json
 
       - name: Create Pull Request
         if: steps.compare.outputs.new_release == 'true'
