@@ -79,9 +79,9 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install Python dependencies
+      - name: Install dependencies
         if: steps.compare.outputs.new_release == 'true'
-        run: pip install -r scripts/requirements.txt
+        run: make install
 
       - name: Regenerate grammar with new tag
         id: regen
@@ -89,7 +89,7 @@ jobs:
         env:
           LATEST: ${{ steps.upstream.outputs.latest }}
         run: |
-          python scripts/generate_grammar.py --tag "$LATEST" --cache
+          make generate TAG="$LATEST"
 
           # Update config.json with new tag
           jq --arg tag "$LATEST" '.release_tag = $tag' scripts/config.json > /tmp/config.json

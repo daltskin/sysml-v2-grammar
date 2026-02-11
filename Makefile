@@ -6,6 +6,7 @@ ANTLR_VER  := 4.13.2
 ANTLR_JAR  := /tmp/antlr4.jar
 ANTLR_URL  := https://www.antlr.org/download/antlr-$(ANTLR_VER)-complete.jar
 ANTLR_SHA  := eae2dfa119a64327444672aff63e9ec35a20180dc5b8090b7a6ab85125df4d76
+TAG        ?=
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -26,7 +27,7 @@ install-dev: install ## Install runtime + linting dependencies
 # ---------------------------------------------------------------------------
 
 generate: ## Regenerate ANTLR4 grammar from OMG spec
-	$(PYTHON) scripts/generate_grammar.py --cache
+	$(PYTHON) scripts/generate_grammar.py $(if $(TAG),--tag $(TAG)) --cache
 
 drift-check: generate ## Check that committed grammar matches generator output
 	@if git diff --exit-code grammar/; then \

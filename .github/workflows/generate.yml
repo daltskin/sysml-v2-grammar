@@ -7,12 +7,14 @@ on:
     paths:
       - 'scripts/**'
       - 'grammar/**'
+      - 'Makefile'
       - '.github/workflows/generate.yml'
   pull_request:
     branches: [main]
     paths:
       - 'scripts/**'
       - 'grammar/**'
+      - 'Makefile'
   workflow_dispatch:
 
 permissions:
@@ -31,21 +33,11 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install Python dependencies
-        run: pip install -r scripts/requirements.txt
-
-      - name: Regenerate grammar from OMG spec
-        run: python scripts/generate_grammar.py --cache
+      - name: Install dependencies
+        run: make install
 
       - name: Check for grammar drift
-        run: |
-          if git diff --exit-code grammar/; then
-            echo "✅ Grammar files are up to date"
-          else
-            echo "⚠️ Grammar files have changed after regeneration"
-            git diff grammar/
-            exit 1
-          fi
+        run: make drift-check
 
   validate:
     name: Validate with ANTLR4
@@ -61,30 +53,8 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Download ANTLR4
-        run: |
-          curl -fsSL -o /tmp/antlr4.jar \
-            https://www.antlr.org/download/antlr-4.13.2-complete.jar
-          echo "eae2dfa119a64327444672aff63e9ec35a20180dc5b8090b7a6ab85125df4d76  /tmp/antlr4.jar" | sha256sum -c -
-
-      - name: Compile grammar (Java target)
-        run: |
-          mkdir -p /tmp/antlr-out
-          java -jar /tmp/antlr4.jar \
-            -Dlanguage=Java \
-            -o /tmp/antlr-out \
-            grammar/SysMLv2Lexer.g4 grammar/SysMLv2.g4
-          echo "✅ Grammar compiles successfully"
-
-      - name: Compile grammar (TypeScript target)
-        run: |
-          mkdir -p /tmp/antlr-out-ts
-          java -jar /tmp/antlr4.jar \
-            -Dlanguage=TypeScript \
-            -visitor -no-listener \
-            -o /tmp/antlr-out-ts \
-            grammar/SysMLv2Lexer.g4 grammar/SysMLv2.g4
-          echo "✅ TypeScript target compiles successfully"
+      - name: Validate grammar (Java + TypeScript)
+        run: make validate validate-ts
 
   parse-examples:
     name: Parse Example Files
@@ -100,37 +70,5 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Download ANTLR4
-        run: |
-          curl -fsSL -o /tmp/antlr4.jar \
-            https://www.antlr.org/download/antlr-4.13.2-complete.jar
-          echo "eae2dfa119a64327444672aff63e9ec35a20180dc5b8090b7a6ab85125df4d76  /tmp/antlr4.jar" | sha256sum -c -
-
-      - name: Compile grammar for testing
-        run: |
-          java -jar /tmp/antlr4.jar \
-            -Dlanguage=Java \
-            -o /tmp/antlr-test \
-            grammar/SysMLv2Lexer.g4 grammar/SysMLv2.g4
-          cd /tmp/antlr-test
-          javac -cp "/tmp/antlr4.jar:." *.java
-
       - name: Parse example files
-        run: |
-          cd /tmp/antlr-test
-          PASS=0
-          FAIL=0
-          for f in "$GITHUB_WORKSPACE"/examples/*.sysml; do
-            echo -n "Parsing $(basename $f)... "
-            if java -cp "/tmp/antlr4.jar:." org.antlr.v4.gui.TestRig \
-              SysMLv2 rootNamespace "$f" 2>&1 | grep -qi "error"; then
-              echo "❌ FAIL"
-              FAIL=$((FAIL + 1))
-            else
-              echo "✅ PASS"
-              PASS=$((PASS + 1))
-            fi
-          done
-          echo ""
-          echo "Results: $PASS passed, $FAIL failed"
-          if [ $FAIL -gt 0 ]; then exit 1; fi
+        run: make parse-examples
