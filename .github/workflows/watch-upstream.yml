@@ -107,14 +107,22 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          git checkout -b "$BRANCH"
+          # Force-push to handle reruns where the branch already exists
+          git checkout -B "$BRANCH"
           git add -A
           git commit -m "chore: update grammar to OMG release $LATEST
 
           Upstream release changed from $CURRENT to $LATEST.
           Grammar files regenerated from Systems-Modeling/SysML-v2-Release@$LATEST."
 
-          git push origin "$BRANCH"
+          git push --force-with-lease origin "$BRANCH"
+
+          # Skip PR creation if one already exists for this branch
+          EXISTING=$(gh pr list --head "$BRANCH" --json number --jq '.[0].number')
+          if [ -n "$EXISTING" ]; then
+            echo "PR #$EXISTING already exists for $BRANCH — force-pushed updated content"
+            exit 0
+          fi
 
           gh pr create \
             --title "Update grammar to OMG release $LATEST" \
