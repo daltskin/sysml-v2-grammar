@@ -1,5 +1,5 @@
 {
-  "release_tag": "2025-12",
+  "release_tag": "2026-01",
   "release_repo": "Systems-Modeling/SysML-v2-Release",
   "bnf_files": {
     "kerml": "bnf/KerML-textual-bnf.kebnf",
