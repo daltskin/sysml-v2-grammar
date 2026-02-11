@@ -453,7 +453,12 @@ POSTFIX_OPERATORS = [".", ".?", "->", "#", "["]
 class Antlr4Transformer:
     """Transforms parsed .kebnf rules into ANTLR4 grammar strings."""
 
-    def __init__(self, rules: Dict[str, GrammarRule], rule_order: List[str], release_tag: str = ""):
+    def __init__(
+        self,
+        rules: Dict[str, GrammarRule],
+        rule_order: List[str],
+        release_tag: str = "",
+    ):
         self.rules = rules
         self.rule_order = rule_order
         self.release_tag = release_tag
@@ -530,7 +535,9 @@ class Antlr4Transformer:
         lines = []
         lines.append("/*")
         lines.append(" * SysML v2.0 ANTLR4 Lexer Grammar")
-        lines.append(f" * AUTO-GENERATED from official SysML v2 specification BNF (release {self.release_tag})")
+        lines.append(
+            f" * AUTO-GENERATED from official SysML v2 specification BNF (release {self.release_tag})"
+        )
         lines.append(
             " * Do not edit manually — run: python scripts/grammar/generate_grammar.py"
         )
@@ -595,7 +602,9 @@ class Antlr4Transformer:
         lines = []
         lines.append("/*")
         lines.append(" * SysML v2.0 ANTLR4 Parser Grammar")
-        lines.append(f" * AUTO-GENERATED from official SysML v2 specification BNF (release {self.release_tag})")
+        lines.append(
+            f" * AUTO-GENERATED from official SysML v2 specification BNF (release {self.release_tag})"
+        )
         lines.append(
             " * Do not edit manually — run: python scripts/grammar/generate_grammar.py"
         )
@@ -968,9 +977,7 @@ class Antlr4Transformer:
         # the empty string. Rewrite to explicit alternatives that each require
         # at least one component, matching KerML Identification semantics.
         grammar = grammar.replace(
-            "identification\n"
-            "    : ( LT name GT )? ( name )?\n"
-            "    ;",
+            "identification\n    : ( LT name GT )? ( name )?\n    ;",
             "identification\n"
             "    : LT name GT name\n"
             "    | LT name GT\n"
@@ -1001,9 +1008,7 @@ class Antlr4Transformer:
             "    : namespaceBodyElement*\n"
             "    | packageBodyElement*\n"
             "    ;",
-            "rootNamespace\n"
-            "    : packageBodyElement*\n"
-            "    ;",
+            "rootNamespace\n    : packageBodyElement*\n    ;",
         )
 
         # Fix 16: Make identification optional in namespace/type/classifier
@@ -1013,10 +1018,8 @@ class Antlr4Transformer:
             "namespaceDeclaration\n    : NAMESPACE identification?\n",
         )
         grammar = grammar.replace(
-            "typeDeclaration\n"
-            "    : ( ALL )? identification ( ownedMultiplicity )?",
-            "typeDeclaration\n"
-            "    : ( ALL )? identification? ( ownedMultiplicity )?",
+            "typeDeclaration\n    : ( ALL )? identification ( ownedMultiplicity )?",
+            "typeDeclaration\n    : ( ALL )? identification? ( ownedMultiplicity )?",
         )
         grammar = grammar.replace(
             "classifierDeclaration\n"
@@ -1074,16 +1077,12 @@ class Antlr4Transformer:
             "multiplicitySubset\n    : MULTIPLICITY identification? subsets",
         )
         grammar = grammar.replace(
-            "multiplicityRange\n"
-            "    : MULTIPLICITY identification multiplicityBounds",
-            "multiplicityRange\n"
-            "    : MULTIPLICITY identification? multiplicityBounds",
+            "multiplicityRange\n    : MULTIPLICITY identification multiplicityBounds",
+            "multiplicityRange\n    : MULTIPLICITY identification? multiplicityBounds",
         )
         grammar = grammar.replace(
-            "dependencyDeclaration\n"
-            "    : ( identification FROM )?",
-            "dependencyDeclaration\n"
-            "    : ( identification? FROM )?",
+            "dependencyDeclaration\n    : ( identification FROM )?",
+            "dependencyDeclaration\n    : ( identification? FROM )?",
         )
         grammar = grammar.replace(
             "metadataFeatureDeclaration\n"
@@ -1092,10 +1091,8 @@ class Antlr4Transformer:
             "    : ( identification? ( COLON | TYPED BY ) )?",
         )
         grammar = grammar.replace(
-            "metadataUsageDeclaration\n"
-            "    : ( identification ( COLON | TYPED BY ) )?",
-            "metadataUsageDeclaration\n"
-            "    : ( identification? ( COLON | TYPED BY ) )?",
+            "metadataUsageDeclaration\n    : ( identification ( COLON | TYPED BY ) )?",
+            "metadataUsageDeclaration\n    : ( identification? ( COLON | TYPED BY ) )?",
         )
 
         # Fix 19: Remove extra namespaceBodyElement alternative from packageBody.
@@ -1106,10 +1103,7 @@ class Antlr4Transformer:
             "    | LBRACE ( namespaceBodyElement | elementFilterMember )* RBRACE\n"
             "    | LBRACE packageBodyElement* RBRACE\n"
             "    ;",
-            "packageBody\n"
-            "    : SEMI\n"
-            "    | LBRACE packageBodyElement* RBRACE\n"
-            "    ;",
+            "packageBody\n    : SEMI\n    | LBRACE packageBodyElement* RBRACE\n    ;",
         )
 
         # Fix 20: multiplicityPart restructuring.
@@ -1134,9 +1128,7 @@ class Antlr4Transformer:
             "    : memberPrefix ownedExpression\n"
             "    | memberPrefix? ownedExpression\n"
             "    ;",
-            "resultExpressionMember\n"
-            "    : memberPrefix? ownedExpression\n"
-            "    ;",
+            "resultExpressionMember\n    : memberPrefix? ownedExpression\n    ;",
         )
 
         # Fix 22: SLL baseExpression optimization.
@@ -1154,17 +1146,11 @@ class Antlr4Transformer:
         # Fix 23: Make usageDeclaration optional and add featureSpecializationPart.
         # Anonymous usages are common in SysML (e.g., 'part :> Vehicle;').
         grammar = grammar.replace(
-            "usage\n"
-            "    : usageDeclaration usageCompletion\n"
-            "    ;",
-            "usage\n"
-            "    : usageDeclaration? usageCompletion\n"
-            "    ;",
+            "usage\n    : usageDeclaration usageCompletion\n    ;",
+            "usage\n    : usageDeclaration? usageCompletion\n    ;",
         )
         grammar = grammar.replace(
-            "usageDeclaration\n"
-            "    : identification featureSpecializationPart?\n"
-            "    ;",
+            "usageDeclaration\n    : identification featureSpecializationPart?\n    ;",
             "usageDeclaration\n"
             "    : identification featureSpecializationPart?\n"
             "    | featureSpecializationPart\n"
@@ -1248,9 +1234,7 @@ class Antlr4Transformer:
         # The replacement above already omits defaultReferenceUsage from
         # its original position, so we need to add it back at the end.
         grammar = grammar.replace(
-            "    | successionAsUsage\n"
-            "    | extendedUsage\n"
-            "    ;",
+            "    | successionAsUsage\n    | extendedUsage\n    ;",
             "    | successionAsUsage\n"
             "    | extendedUsage\n"
             "    | defaultReferenceUsage\n"
@@ -1283,18 +1267,14 @@ class Antlr4Transformer:
             "    : ALLOCATION usageDeclaration? ( ALLOCATE",
         )
         grammar = grammar.replace(
-            "messageDeclaration\n"
-            "    : usageDeclaration valuePart?",
-            "messageDeclaration\n"
-            "    : usageDeclaration? valuePart?",
+            "messageDeclaration\n    : usageDeclaration valuePart?",
+            "messageDeclaration\n    : usageDeclaration? valuePart?",
         )
 
         # Fix 29: Make usageDeclaration optional in action-related rules.
         grammar = grammar.replace(
-            "actionUsageDeclaration\n"
-            "    : usageDeclaration valuePart?\n",
-            "actionUsageDeclaration\n"
-            "    : usageDeclaration? valuePart?\n",
+            "actionUsageDeclaration\n    : usageDeclaration valuePart?\n",
+            "actionUsageDeclaration\n    : usageDeclaration? valuePart?\n",
         )
         grammar = grammar.replace(
             "performActionUsageDeclaration\n"
@@ -1347,10 +1327,8 @@ class Antlr4Transformer:
 
         # Fix 34: Make usageDeclaration optional in constraint/requirement/usecase.
         grammar = grammar.replace(
-            "constraintUsageDeclaration\n"
-            "    : usageDeclaration valuePart?\n",
-            "constraintUsageDeclaration\n"
-            "    : usageDeclaration? valuePart?\n",
+            "constraintUsageDeclaration\n    : usageDeclaration valuePart?\n",
+            "constraintUsageDeclaration\n    : usageDeclaration? valuePart?\n",
         )
         grammar = grammar.replace(
             "| REQUIREMENT usageDeclaration ) valuePart?",
@@ -2193,7 +2171,9 @@ def main():
 
     # Step 3: Transform
     print("Step 3: Transforming to ANTLR4...")
-    transformer = Antlr4Transformer(kebnf_parser.rules, kebnf_parser.rule_order, config["release_tag"])
+    transformer = Antlr4Transformer(
+        kebnf_parser.rules, kebnf_parser.rule_order, config["release_tag"]
+    )
     print(f"  Keywords found: {len(transformer.keywords)}")
     print(f"  Operators found: {len(transformer.operators)}")
     print()
