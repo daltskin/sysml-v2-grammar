@@ -1,0 +1,17 @@
+{
+  "release_tag": "2025-12",
+  "release_repo": "Systems-Modeling/SysML-v2-Release",
+  "bnf_files": {
+    "kerml": "bnf/KerML-textual-bnf.kebnf",
+    "sysml": "bnf/SysML-textual-bnf.kebnf"
+  },
+  "output": {
+    "parser_grammar": "grammar/SysMLv2.g4",
+    "lexer_grammar": "grammar/SysMLv2Lexer.g4"
+  },
+  "options": {
+    "root_rule": "rootNamespace",
+    "grammar_name": "SysMLv2",
+    "lexer_name": "SysMLv2Lexer"
+  }
+}
