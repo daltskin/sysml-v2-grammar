@@ -1,6 +1,6 @@
 /*
  * SysML v2.0 ANTLR4 Parser Grammar
- * AUTO-GENERATED from official SysML v2 specification BNF
+ * AUTO-GENERATED from official SysML v2 specification BNF (release 2026-01)
  * Do not edit manually — run: python scripts/grammar/generate_grammar.py
  */
 
