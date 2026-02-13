@@ -1099,6 +1099,64 @@ class Antlr4Transformer:
             "multiplicityRange\n    : MULTIPLICITY identification multiplicityBounds",
             "multiplicityRange\n    : MULTIPLICITY identification? multiplicityBounds",
         )
+
+        # Fix 18b: Remove bare-bracket alternative from multiplicityRange.
+        # The KerML and SysML specs each define MultiplicityRange — KerML
+        # with the 'multiplicity' keyword and SysML with bare brackets.
+        # The generator merges both into alternatives, but the bare-bracket
+        # form duplicates ownedMultiplicityRange → multiplicityBounds,
+        # creating an ambiguity in ownedMultiplicity.  Remove it here since
+        # the bracket path is already covered by multiplicityBounds.
+        grammar = grammar.replace(
+            "multiplicityRange\n"
+            "    : MULTIPLICITY identification? multiplicityBounds typeBody\n"
+            "    | LBRACK ( multiplicityExpressionMember DOT_DOT )?"
+            " multiplicityExpressionMember RBRACK\n"
+            "    ;",
+            "multiplicityRange\n"
+            "    : MULTIPLICITY identification? multiplicityBounds typeBody\n"
+            "    ;",
+        )
+
+        # Fix 18c: Remove multiplicityRange from ownedMultiplicity.
+        # The OMG spec defines OwnedMultiplicity = OwnedMultiplicityRange.
+        # The generator merges KerML/SysML definitions, which adds
+        # multiplicityRange as a second alternative. But multiplicityRange
+        # is a declaration-level rule (starts with MULTIPLICITY keyword),
+        # not an inline modifier like ownedMultiplicityRange (bare [bounds]).
+        grammar = grammar.replace(
+            "ownedMultiplicity\n"
+            "    : ownedMultiplicityRange\n"
+            "    | multiplicityRange\n"
+            "    ;",
+            "ownedMultiplicity\n    : ownedMultiplicityRange\n    ;",
+        )
+
+        # Fix 18d: Merge KerML/SysML typedBy alternatives to fix ambiguity.
+        # KerML defines TypedBy with (COLON | TYPED BY) ownedFeatureTyping.
+        # SysML overrides it with (COLON | DEFINED BY) featureTyping.
+        # The generator merges both as alternatives, but since featureTyping
+        # includes ownedFeatureTyping, the COLON prefix is ambiguous.
+        # Fix: merge into one alternative using featureTyping (the superset).
+        grammar = grammar.replace(
+            "typedBy\n"
+            "    : ( COLON | TYPED BY ) ownedFeatureTyping\n"
+            "    | ( COLON | DEFINED BY ) featureTyping\n"
+            "    ;",
+            "typedBy\n    : ( COLON | TYPED BY | DEFINED BY ) featureTyping\n    ;",
+        )
+
+        # Fix 18e: Merge KerML/SysML typings alternatives to fix ambiguity.
+        # Same issue: ownedFeatureTyping vs featureTyping in comma-separated
+        # list. featureTyping is the superset, so use it for both.
+        grammar = grammar.replace(
+            "typings\n"
+            "    : typedBy ( COMMA ownedFeatureTyping )*\n"
+            "    | typedBy ( COMMA featureTyping )*\n"
+            "    ;",
+            "typings\n    : typedBy ( COMMA featureTyping )*\n    ;",
+        )
+
         grammar = grammar.replace(
             "dependencyDeclaration\n    : ( identification FROM )?",
             "dependencyDeclaration\n    : ( identification? FROM )?",
@@ -1407,6 +1465,98 @@ class Antlr4Transformer:
             "    | multiplicityPart featureSpecialization+\n"
             "    ;",
         )
+
+        # ============================================================
+        # ANTLR warning(154) fixes (Fix 38)
+        #
+        # ANTLR warning(154) fires when an optional block (…)? or (…)*
+        # contains an alternative that can already match the empty string,
+        # making the ? or * redundant.  These patches remove the redundant
+        # markers so the grammar compiles warning-free.
+        # ============================================================
+
+        # Fix 38a: featurePrefix — ownedCrossFeatureMember can match ε
+        # (via ownedCrossFeature → basicUsagePrefix usageDeclaration?
+        #  where basicUsagePrefix and usageDeclaration? are all-optional).
+        grammar = grammar.replace(
+            "    : ( endFeaturePrefix ( ownedCrossFeatureMember )? | basicFeaturePrefix )",
+            "    : ( endFeaturePrefix ownedCrossFeatureMember | basicFeaturePrefix )",
+        )
+
+        # Fix 38b: resultExpressionMember — memberPrefix can match ε
+        # (memberPrefix = ( VISIBILITY )?).  After Fix 21 collapses to
+        # memberPrefix?, the ? is still redundant.
+        grammar = grammar.replace(
+            "resultExpressionMember\n    : memberPrefix? ownedExpression\n    ;",
+            "resultExpressionMember\n    : memberPrefix ownedExpression\n    ;",
+        )
+
+        # Fix 38c: endUsagePrefix — same ownedCrossFeatureMember ε issue.
+        grammar = grammar.replace(
+            "endUsagePrefix\n    : END ( ownedCrossFeatureMember )?\n    ;",
+            "endUsagePrefix\n    : END ownedCrossFeatureMember\n    ;",
+        )
+
+        # Fix 38d: sendNode — both optional blocks contain epsilon-capable
+        # alternatives.  actionUsageDeclaration = usageDeclaration? valuePart?
+        # can match ε, making the first (…)? redundant.  The second group
+        # has emptyParameterMember (ε) + senderReceiverPart.
+        grammar = grammar.replace(
+            ")? SEND ( nodeParameterMember senderReceiverPart?"
+            " | emptyParameterMember senderReceiverPart )? actionBody",
+            ") SEND ( nodeParameterMember senderReceiverPart?"
+            " | emptyParameterMember senderReceiverPart ) actionBody",
+        )
+
+        # Fix 38e: returnParameterMember — memberPrefix can match ε.
+        grammar = grammar.replace(
+            "returnParameterMember\n    : memberPrefix? RETURN usageElement\n    ;",
+            "returnParameterMember\n    : memberPrefix RETURN usageElement\n    ;",
+        )
+
+        # Fix 38f: requirementConstraintMember — memberPrefix can match ε.
+        grammar = grammar.replace(
+            "requirementConstraintMember\n"
+            "    : memberPrefix? requirementKind requirementConstraintUsage\n"
+            "    ;",
+            "requirementConstraintMember\n"
+            "    : memberPrefix requirementKind requirementConstraintUsage\n"
+            "    ;",
+        )
+
+        # Fix 38g: framedConcernMember — memberPrefix can match ε.
+        grammar = grammar.replace(
+            "framedConcernMember\n    : memberPrefix? FRAME framedConcernUsage\n    ;",
+            "framedConcernMember\n    : memberPrefix FRAME framedConcernUsage\n    ;",
+        )
+
+        # ============================================================
+        # Go target compatibility (Fix 39)
+        #
+        # The Go ANTLR runtime generates exported methods from rule
+        # names.  Rules named 'empty*' collide with Go identifiers in
+        # the generated code.  Append '_' to each epsilon-only rule
+        # and update all references.
+        # ============================================================
+        go_renames = {
+            "emptyFeature": "emptyFeature_",
+            "emptyMultiplicity": "emptyMultiplicity_",
+            "emptyUsage": "emptyUsage_",
+            "emptyActionUsage": "emptyActionUsage_",
+        }
+        for old_name, new_name in go_renames.items():
+            # Rename the rule definition (at start of line)
+            grammar = grammar.replace(f"\n{old_name}\n", f"\n{new_name}\n")
+            # Rename references in other rules — use word-boundary-safe
+            # replacement: the old name is always preceded by whitespace and
+            # followed by whitespace or newline.
+            import re
+
+            grammar = re.sub(
+                rf"(?<=\s){re.escape(old_name)}(?=[\s\n])",
+                new_name,
+                grammar,
+            )
 
         return grammar
 
