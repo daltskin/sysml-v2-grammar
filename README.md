@@ -1,15 +1,12 @@
 # SysML v2 ANTLR4 Grammar
 
-ANTLR4 grammar for the SysML v2 textual notation, automatically generated from
-the OMG [Systems-Modeling/SysML-v2-Release](https://github.com/Systems-Modeling/SysML-v2-Release)
-specification grammar (KEBNF format).
+ANTLR4 grammar for the SysML v2 textual notation, automatically generated from the OMG [Systems-Modeling/SysML-v2-Release](https://github.com/Systems-Modeling/SysML-v2-Release) specification grammar (KEBNF format).
 
 ## Quick Start
 
 ### Devcontainer (recommended)
 
-Open in GitHub Codespaces or VS Code Dev Containers — everything is pre-installed
-and ready via the `postCreateCommand`.
+Open in GitHub Codespaces or VS Code Dev Containers — everything is pre-installed and ready via the `postCreateCommand`.
 
 ### Manual Setup
 
@@ -178,8 +175,7 @@ resets the version to `YYYY.MM.0`.
 
 ## Contributing to grammars-v4
 
-This repo automates the creation of a ready-to-submit contribution for
-[antlr/grammars-v4](https://github.com/antlr/grammars-v4).
+This repo automates the creation of a ready-to-submit contribution for [antlr/grammars-v4](https://github.com/antlr/grammars-v4).
 
 ```bash
 make contrib           # Build contribution directory → contrib/sysml/sysmlv2/
@@ -197,8 +193,7 @@ The `contrib` target generates:
 | `README.md` | Documentation with source references |
 | `examples/*.sysml` | Test input files |
 
-The CI pipeline builds and verifies the contribution on every push, and attaches
-a `grammars-v4-sysmlv2-<version>` artifact to each GitHub Release.
+The CI pipeline builds and verifies the contribution on every push, and attaches a `grammars-v4-sysmlv2-<version>` artifact to each GitHub Release.
 
 To submit a PR:
 
