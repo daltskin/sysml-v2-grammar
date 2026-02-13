@@ -1,4 +1,4 @@
-.PHONY: help install generate drift-check lint format validate test clean contrib ci
+.PHONY: help install generate drift-check lint format validate test clean contrib version bump-revision ci
 
 PYTHON     ?= python3
 PIP        ?= pip
@@ -90,6 +90,18 @@ test: $(ANTLR_JAR) ## Parse example .sysml files through the grammar
 
 contrib: ## Build and verify grammars-v4 contribution
 	$(PYTHON) scripts/build_contrib.py --verify
+
+# ---------------------------------------------------------------------------
+# Versioning
+# ---------------------------------------------------------------------------
+
+version: ## Show current grammar version and OMG release tag
+	@VERSION=$$(jq -r '.grammar_version' scripts/config.json); \
+	TAG=$$(jq -r '.release_tag' scripts/config.json); \
+	echo "Grammar version: $$VERSION (OMG release: $$TAG)"
+
+bump-revision: ## Bump the grammar revision (e.g. 2026.01.0 → 2026.01.1)
+	@$(PYTHON) scripts/bump_version.py
 
 # ---------------------------------------------------------------------------
 # Housekeeping
