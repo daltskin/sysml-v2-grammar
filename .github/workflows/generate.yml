@@ -180,7 +180,7 @@ jobs:
         run: |
           VERSION=$(jq -r '.grammar_version' scripts/config.json)
           ARCHIVE="grammars-v4-sysmlv2-${VERSION}.zip"
-          cd contrib && zip -r "../${ARCHIVE}" sysml/
+          cd contrib/sysml && zip -r "../../${ARCHIVE}" sysmlv2/
           echo "path=${ARCHIVE}" >> "$GITHUB_OUTPUT"
 
       - name: Read version metadata
