@@ -175,6 +175,14 @@ jobs:
       - name: Build contribution
         run: make contrib
 
+      - name: Package contribution archive
+        id: archive
+        run: |
+          VERSION=$(jq -r '.grammar_version' scripts/config.json)
+          ARCHIVE="grammars-v4-sysmlv2-${VERSION}.zip"
+          cd contrib && zip -r "../${ARCHIVE}" sysml/
+          echo "path=${ARCHIVE}" >> "$GITHUB_OUTPUT"
+
       - name: Read version metadata
         id: meta
         run: |
@@ -214,17 +222,10 @@ jobs:
             `YYYY.MM.REV` — `YYYY.MM` tracks the OMG release, `REV` increments
             for each grammar release from that spec.
 
-            ### Files
-            - **SysMLv2Parser.g4** — Parser grammar
-            - **SysMLv2Lexer.g4** — Lexer grammar
-            - **SysMLv2Lexer.tokens** — Token definitions
-
-            ### grammars-v4 Contribution
-            Download the `grammars-v4-sysmlv2-${{ steps.meta.outputs.version }}` artifact
-            for a ready-to-submit contribution to
+            ### Contents
+            The zip contains grammar files, examples, and a ready-to-submit
+            contribution for
             [antlr/grammars-v4](https://github.com/antlr/grammars-v4).
           files: |
-            grammar/SysMLv2Parser.g4
-            grammar/SysMLv2Lexer.g4
-            grammar/SysMLv2Lexer.tokens
+            ${{ steps.archive.outputs.path }}
           fail_on_unmatched_files: true
