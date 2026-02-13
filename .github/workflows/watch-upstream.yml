@@ -91,8 +91,13 @@ jobs:
         run: |
           make generate TAG="$LATEST"
 
-          # Update config.json with new tag
-          jq --arg tag "$LATEST" '.release_tag = $tag' scripts/config.json > scripts/config.json.tmp
+          # Derive new grammar_version from OMG tag (YYYY-MM → YYYY.MM.0)
+          NEW_VERSION=$(echo "$LATEST" | sed 's/-/./' | sed 's/$/.0/')
+
+          # Update config.json with new tag and reset version
+          jq --arg tag "$LATEST" --arg ver "$NEW_VERSION" \
+            '.release_tag = $tag | .grammar_version = $ver' \
+            scripts/config.json > scripts/config.json.tmp
           mv scripts/config.json.tmp scripts/config.json
 
       - name: Create Pull Request

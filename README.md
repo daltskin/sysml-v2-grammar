@@ -25,12 +25,13 @@ make download-antlr
 
 ```bash
 make generate          # Regenerate grammar from the OMG spec
-make validate          # Compile grammar with ANTLR4 (Java target)
-make validate-ts       # Compile grammar with ANTLR4 (TypeScript target)
-make parse-examples    # Parse example .sysml files through the grammar
+make validate          # Compile grammar with ANTLR4 (Java + TypeScript)
+make test              # Parse example .sysml files through the grammar
 make lint              # Run all linters (ruff, yamllint, actionlint)
-make audit             # Scan Python dependencies for known CVEs
-make format            # Auto-format Python scripts and grammar files
+make format            # Auto-format Python scripts
+make contrib           # Build and verify grammars-v4 contribution
+make version           # Show current grammar version
+make bump-revision     # Bump revision (e.g. 2026.01.0 → 2026.01.1)
 make ci                # Run full CI pipeline locally
 make help              # Show all available targets
 ```
@@ -81,7 +82,8 @@ The generated `.g4` files are written to `grammar/`.
 
 | Key | Description |
 |-----|-------------|
-| `release_tag` | OMG release tag (e.g., `2025-12`) |
+| `release_tag` | OMG release tag (e.g., `2026-01`) |
+| `grammar_version` | Grammar version (e.g., `2026.01.0`) |
 | `release_repo` | GitHub repo for the OMG spec |
 | `bnf_files` | Paths to KerML and SysML KEBNF files within the release |
 | `output` | Output file names for parser and lexer grammars |
@@ -142,8 +144,37 @@ a pull request with regenerated grammar files.
 
 ## Current Spec Version
 
-- **Release**: `2026-01`
+- **Grammar version**: `2026.01.0`
+- **OMG release**: `2026-01`
 - **Source**: [Systems-Modeling/SysML-v2-Release](https://github.com/Systems-Modeling/SysML-v2-Release/tree/2026-01)
+
+## Versioning
+
+Grammar versions follow **`YYYY.MM.REV`** format:
+
+| Segment | Meaning |
+|---------|---------|
+| `YYYY.MM` | Derived from the OMG release tag (e.g., `2026-01` → `2026.01`) |
+| `REV` | Revision counter, starting at `0`, incremented for each grammar release |
+
+Examples:
+
+| Version | Scenario |
+|---------|----------|
+| `2026.01.0` | First grammar release from OMG `2026-01` |
+| `2026.01.1` | Bug fix or improvement (same OMG spec) |
+| `2026.03.0` | First release from new OMG `2026-03` (REV resets) |
+
+To bump the revision before a new release:
+
+```bash
+make bump-revision     # 2026.01.0 → 2026.01.1
+git add scripts/config.json
+git commit -m "chore: bump grammar version to $(jq -r .grammar_version scripts/config.json)"
+```
+
+When the `watch-upstream` workflow detects a new OMG release, it automatically
+resets the version to `YYYY.MM.0`.
 
 ## Contributing to grammars-v4
 
@@ -167,7 +198,7 @@ The `contrib` target generates:
 | `examples/*.sysml` | Test input files |
 
 The CI pipeline builds and verifies the contribution on every push, and attaches
-a `grammars-v4-sysmlv2-<tag>` artifact to each GitHub Release.
+a `grammars-v4-sysmlv2-<version>` artifact to each GitHub Release.
 
 To submit a PR:
 

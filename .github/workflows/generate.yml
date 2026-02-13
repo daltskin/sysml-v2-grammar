@@ -57,16 +57,18 @@ jobs:
       - name: Check for grammar drift
         run: make drift-check
 
-      - name: Read release tag
+      - name: Read version metadata
         id: meta
         run: |
           TAG=$(jq -r '.release_tag' scripts/config.json)
+          VERSION=$(jq -r '.grammar_version' scripts/config.json)
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Upload grammar artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
         with:
-          name: sysml-v2-grammar-${{ steps.meta.outputs.tag }}
+          name: sysml-v2-grammar-${{ steps.meta.outputs.version }}
           path: |
             grammar/SysMLv2Parser.g4
             grammar/SysMLv2Lexer.g4
@@ -131,16 +133,18 @@ jobs:
       - name: Build and verify contribution
         run: make contrib
 
-      - name: Read release tag
+      - name: Read version metadata
         id: meta
         run: |
           TAG=$(jq -r '.release_tag' scripts/config.json)
+          VERSION=$(jq -r '.grammar_version' scripts/config.json)
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Upload contribution artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
         with:
-          name: grammars-v4-sysmlv2-${{ steps.meta.outputs.tag }}
+          name: grammars-v4-sysmlv2-${{ steps.meta.outputs.version }}
           path: contrib/sysml/sysmlv2/
           if-no-files-found: error
 
@@ -171,21 +175,23 @@ jobs:
       - name: Build contribution
         run: make contrib
 
-      - name: Read release tag
+      - name: Read version metadata
         id: meta
         run: |
           TAG=$(jq -r '.release_tag' scripts/config.json)
+          VERSION=$(jq -r '.grammar_version' scripts/config.json)
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Check if release already exists
         id: check
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG="v${{ steps.meta.outputs.tag }}"
-          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+          VTAG="v${{ steps.meta.outputs.version }}"
+          if gh release view "$VTAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
-            echo "Release $TAG already exists — skipping"
+            echo "Release $VTAG already exists — skipping"
           else
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
@@ -194,13 +200,19 @@ jobs:
         if: steps.check.outputs.exists == 'false'
         uses: softprops/action-gh-release@da05d552573ad5aba039eaac05058a918a7bf631  # v2.2.2
         with:
-          tag_name: v${{ steps.meta.outputs.tag }}
-          name: SysML v2 Grammar — ${{ steps.meta.outputs.tag }}
+          tag_name: v${{ steps.meta.outputs.version }}
+          name: SysML v2 Grammar v${{ steps.meta.outputs.version }}
           body: |
-            ## SysML v2 ANTLR4 Grammar — ${{ steps.meta.outputs.tag }}
+            ## SysML v2 ANTLR4 Grammar v${{ steps.meta.outputs.version }}
 
-            Generated from the OMG SysML v2 Release
-            (tag `${{ steps.meta.outputs.tag }}`).
+            Generated from OMG SysML v2 Release
+            [`${{ steps.meta.outputs.tag }}`][src].
+
+            [src]: https://github.com/Systems-Modeling/SysML-v2-Release/tree/${{ steps.meta.outputs.tag }}
+
+            ### Version Scheme
+            `YYYY.MM.REV` — `YYYY.MM` tracks the OMG release, `REV` increments
+            for each grammar release from that spec.
 
             ### Files
             - **SysMLv2Parser.g4** — Parser grammar
@@ -208,7 +220,7 @@ jobs:
             - **SysMLv2Lexer.tokens** — Token definitions
 
             ### grammars-v4 Contribution
-            Download the `grammars-v4-sysmlv2-${{ steps.meta.outputs.tag }}` artifact
+            Download the `grammars-v4-sysmlv2-${{ steps.meta.outputs.version }}` artifact
             for a ready-to-submit contribution to
             [antlr/grammars-v4](https://github.com/antlr/grammars-v4).
           files: |
