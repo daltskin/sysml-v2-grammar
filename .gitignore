@@ -13,6 +13,7 @@ venv/
 
 # ANTLR4 VS Code extension
 grammar/.antlr/
+*.log
 
 # Linter cache
 .ruff_cache/

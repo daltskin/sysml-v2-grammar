@@ -2,7 +2,7 @@
 """Build a grammars-v4-compatible contribution directory.
 
 Generates all required assets for https://github.com/antlr/grammars-v4:
-  - .g4 grammars (copied from grammar/, already formatted with EOF)
+  - Formatted .g4 grammars (with EOF on the start rule)
   - pom.xml (Maven test config)
   - desc.xml (trgen test descriptor)
   - README.md (documentation)
@@ -42,7 +42,102 @@ def ensure_dir(path: Path) -> None:
     path.mkdir(parents=True, exist_ok=True)
 
 
+# ── grammar patching ────────────────────────────────────────────────────────
+
+
+def patch_eof(grammar_text: str, start_rule: str) -> str:
+    """Ensure the start rule ends with EOF.
+
+    Handles both `rule : alts ;` and multiline forms.  If already present this
+    is a no-op.
+    """
+    # Match the start rule block: `startRule\n    : ... ;`
+    pattern = re.compile(
+        rf"(^{re.escape(start_rule)}\s*\n(?:.*?\n)*?)([ \t]*;)",
+        re.MULTILINE,
+    )
+    match = pattern.search(grammar_text)
+    if not match:
+        print(f"⚠️  Could not locate start rule '{start_rule}' — skipping EOF patch")
+        return grammar_text
+
+    block = match.group(0)
+    if "EOF" in block:
+        return grammar_text  # already patched
+
+    # Insert `EOF` before the trailing `;`
+    return (
+        grammar_text[: match.start(2)]
+        + "    EOF\n    ;"
+        + grammar_text[match.end(2) + 1 :]
+    )
+
+
+def strip_auto_generated_header(text: str) -> str:
+    """Replace the 'Do not edit manually' header with a contribution-friendly one."""
+    return re.sub(
+        r"/\*.*?AUTO-GENERATED.*?\*/",
+        """\
+/*
+ * SysML v2 ANTLR4 Grammar
+ * Derived from the OMG SysML v2 specification (KEBNF format).
+ * Source: https://github.com/Systems-Modeling/SysML-v2-Release
+ * Generator: https://github.com/daltskin/sysml-v2-grammar
+ * License: MIT
+ */""",
+        text,
+        count=1,
+        flags=re.DOTALL,
+    )
+
+
 # ── antlr-format ────────────────────────────────────────────────────────────
+
+# Standard antlr-format configuration comments required by grammars-v4.
+# These are embedded at the top of each .g4 file so the grammars-v4 CI
+# formatting check passes.  See:
+# https://github.com/antlr/grammars-v4/wiki#is-there-a-coding-standard-for-antlr4-grammars
+ANTLR_FORMAT_CONFIG = """\
+// $antlr-format alignTrailingComments true, columnLimit 150, useTab false
+// $antlr-format allowShortRulesOnASingleLine false, allowShortBlocksOnASingleLine true
+// $antlr-format alignSemicolons hanging, alignColons hanging
+// $antlr-format minEmptyLines 1, maxEmptyLinesToKeep 1, reflowComments false
+"""
+
+
+def inject_antlr_format_config(grammar_text: str) -> str:
+    """Insert antlr-format config comments after the header/options block.
+
+    Placed immediately before the first rule so antlr-format picks them up.
+    If already present this is a no-op.
+    """
+    if "$antlr-format" in grammar_text:
+        return grammar_text  # already has config
+
+    # Insert after the options { ... } block, or after the grammar declaration
+    # Look for the end of `options { ... };` or `options { ... }`
+    options_match = re.search(
+        r"^options\s*\{[^}]*\}\s*;?\s*$", grammar_text, re.MULTILINE
+    )
+    if options_match:
+        insert_pos = options_match.end()
+    else:
+        # Insert after the grammar declaration line
+        grammar_decl = re.search(
+            r"^(parser |lexer )?grammar\s+\w+\s*;", grammar_text, re.MULTILINE
+        )
+        if grammar_decl:
+            insert_pos = grammar_decl.end()
+        else:
+            # Fallback: insert after the header comment
+            insert_pos = 0
+
+    return (
+        grammar_text[:insert_pos]
+        + "\n\n"
+        + ANTLR_FORMAT_CONFIG
+        + grammar_text[insert_pos:]
+    )
 
 
 def run_antlr_format(output_dir: Path) -> None:
@@ -77,10 +172,6 @@ def run_antlr_format(output_dir: Path) -> None:
 
 
 def generate_pom(grammar_name: str, lexer_name: str, start_rule: str) -> str:
-    """Generate the canonical pom.xml with <parent> for grammars-v4."""
-    # antlr4test-maven-plugin appends "Parser"/"Lexer" to grammarName,
-    # so we strip the "Parser" suffix from our grammar file name.
-    base_name = grammar_name.removesuffix("Parser")
     return textwrap.dedent(f"""\
         <project xmlns="http://maven.apache.org/POM/4.0.0"
                  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -126,88 +217,7 @@ def generate_pom(grammar_name: str, lexer_name: str, start_rule: str) -> str:
                             <verbose>false</verbose>
                             <showTree>false</showTree>
                             <entryPoint>{start_rule}</entryPoint>
-                            <grammarName>{base_name}</grammarName>
-                            <packageName></packageName>
-                            <exampleFiles>examples/</exampleFiles>
-                        </configuration>
-                        <executions>
-                            <execution>
-                                <goals>
-                                    <goal>test</goal>
-                                </goals>
-                            </execution>
-                        </executions>
-                    </plugin>
-                </plugins>
-            </build>
-        </project>
-    """)
-
-
-def generate_standalone_pom(grammar_name: str, lexer_name: str, start_rule: str) -> str:
-    """Generate a standalone pom.xml for local testing outside grammars-v4.
-
-    Replaces the <parent> block with inline groupId, version, properties,
-    and the ANTLR runtime dependency so Maven can resolve everything locally.
-    """
-    # antlr4test-maven-plugin appends "Parser"/"Lexer" to grammarName
-    base_name = grammar_name.removesuffix("Parser")
-    return textwrap.dedent(f"""\
-        <project xmlns="http://maven.apache.org/POM/4.0.0"
-                 xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-                 xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
-                                     http://maven.apache.org/xsd/maven-4.0.0.xsd">
-            <modelVersion>4.0.0</modelVersion>
-            <groupId>org.antlr.grammars</groupId>
-            <artifactId>sysmlv2</artifactId>
-            <version>1.0-SNAPSHOT</version>
-            <packaging>jar</packaging>
-            <name>SysML v2 grammar</name>
-            <properties>
-                <maven.compiler.source>11</maven.compiler.source>
-                <maven.compiler.target>11</maven.compiler.target>
-                <antlr.version>4.13.2</antlr.version>
-                <antlr4test-maven-plugin.version>1.22</antlr4test-maven-plugin.version>
-            </properties>
-            <dependencies>
-                <dependency>
-                    <groupId>org.antlr</groupId>
-                    <artifactId>antlr4-runtime</artifactId>
-                    <version>${{antlr.version}}</version>
-                </dependency>
-            </dependencies>
-            <build>
-                <plugins>
-                    <plugin>
-                        <groupId>org.antlr</groupId>
-                        <artifactId>antlr4-maven-plugin</artifactId>
-                        <version>${{antlr.version}}</version>
-                        <configuration>
-                            <sourceDirectory>${{basedir}}</sourceDirectory>
-                            <includes>
-                                <include>{lexer_name}.g4</include>
-                                <include>{grammar_name}.g4</include>
-                            </includes>
-                            <visitor>true</visitor>
-                            <listener>true</listener>
-                        </configuration>
-                        <executions>
-                            <execution>
-                                <goals>
-                                    <goal>antlr4</goal>
-                                </goals>
-                            </execution>
-                        </executions>
-                    </plugin>
-                    <plugin>
-                        <groupId>com.khubla.antlr</groupId>
-                        <artifactId>antlr4test-maven-plugin</artifactId>
-                        <version>${{antlr4test-maven-plugin.version}}</version>
-                        <configuration>
-                            <verbose>false</verbose>
-                            <showTree>false</showTree>
-                            <entryPoint>{start_rule}</entryPoint>
-                            <grammarName>{base_name}</grammarName>
+                            <grammarName>{grammar_name}</grammarName>
                             <packageName></packageName>
                             <exampleFiles>examples/</exampleFiles>
                         </configuration>
@@ -228,14 +238,13 @@ def generate_standalone_pom(grammar_name: str, lexer_name: str, start_rule: str)
 def generate_desc(start_rule: str) -> str:
     # List targets that grammars-v4 CI tests across.
     # Our grammar is target-agnostic (no actions/predicates) so all should work.
-    targets = "Antlr4ng;CSharp;Cpp;Dart;Go;Java;JavaScript;PHP;Python3;TypeScript"
+    targets = "Antlr4ng;CSharp;Cpp;Dart;Go;Java;JavaScript;PHP;Python3;Rust;TypeScript"
     return textwrap.dedent(f"""\
         <?xml version="1.0" encoding="UTF-8" ?>
         <desc xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
               xsi:noNamespaceSchemaLocation="../../_scripts/desc.xsd">
            <targets>{targets}</targets>
            <inputs>examples/**/*.sysml</inputs>
-           <entry-point>{start_rule}</entry-point>
         </desc>
     """)
 
@@ -272,6 +281,10 @@ def generate_readme(release_tag: str, release_repo: str) -> str:
         The SysML v2 specification grammar is owned by the Object Management Group
         (OMG).  This project provides a derived ANTLR4 translation of the official
         KEBNF grammar.
+
+        ## Reference
+
+        - <http://pldb.info/concepts/sysml>
     """)
 
 
@@ -297,11 +310,22 @@ def build_contrib(output_dir: Path, *, skip_format: bool = False) -> None:
     ensure_dir(output_dir)
     ensure_dir(output_dir / "examples")
 
-    # Copy grammar files (already have correct header, EOF, antlr-format
-    # config, and formatting applied in grammar/)
-    for g4_name in (f"{grammar_name}.g4", f"{lexer_name}.g4"):
-        shutil.copy2(GRAMMAR_DIR / g4_name, output_dir / g4_name)
-        print(f"  ✅ {g4_name}")
+    # Copy and patch parser grammar
+    parser_src = GRAMMAR_DIR / f"{grammar_name}.g4"
+    parser_text = parser_src.read_text()
+    parser_text = strip_auto_generated_header(parser_text)
+    parser_text = patch_eof(parser_text, start_rule)
+    parser_text = inject_antlr_format_config(parser_text)
+    (output_dir / f"{grammar_name}.g4").write_text(parser_text)
+    print(f"  ✅ {grammar_name}.g4 (EOF patched, antlr-format config injected)")
+
+    # Copy and patch lexer grammar
+    lexer_src = GRAMMAR_DIR / f"{lexer_name}.g4"
+    lexer_text = lexer_src.read_text()
+    lexer_text = strip_auto_generated_header(lexer_text)
+    lexer_text = inject_antlr_format_config(lexer_text)
+    (output_dir / f"{lexer_name}.g4").write_text(lexer_text)
+    print(f"  ✅ {lexer_name}.g4 (antlr-format config injected)")
 
     # Copy example files
     examples = sorted(EXAMPLES_DIR.glob("*.sysml"))
@@ -311,17 +335,11 @@ def build_contrib(output_dir: Path, *, skip_format: bool = False) -> None:
         shutil.copy2(ex, output_dir / "examples" / ex.name)
     print(f"  ✅ {len(examples)} example(s) copied")
 
-    # Generate pom.xml (canonical with <parent> for grammars-v4)
+    # Generate pom.xml
     (output_dir / "pom.xml").write_text(
         generate_pom(grammar_name, lexer_name, start_rule)
     )
     print("  ✅ pom.xml")
-
-    # Generate standalone pom for local testing (no parent dependency)
-    (output_dir / "pom-standalone.xml").write_text(
-        generate_standalone_pom(grammar_name, lexer_name, start_rule)
-    )
-    print("  ✅ pom-standalone.xml (for local testing)")
 
     # Generate desc.xml
     (output_dir / "desc.xml").write_text(generate_desc(start_rule))
@@ -331,8 +349,7 @@ def build_contrib(output_dir: Path, *, skip_format: bool = False) -> None:
     (output_dir / "README.md").write_text(generate_readme(release_tag, release_repo))
     print("  ✅ README.md")
 
-    # Run antlr-format (should be a no-op since grammar/ is already formatted,
-    # but acts as a safety net for grammars-v4 CI compliance)
+    # Run antlr-format
     if not skip_format:
         run_antlr_format(output_dir)
     else:
@@ -386,12 +403,12 @@ def verify_contrib(output_dir: Path) -> bool:
         print("  ❌ Start rule missing EOF")
         ok = False
 
-    # Check header is contribution-friendly
-    if "Generator: https://github.com/daltskin/sysml-v2-grammar" in parser_text:
-        print("  ✅ Header is contribution-friendly")
-    else:
-        print("  ❌ Parser grammar missing contribution-friendly header")
+    # Check header is contribution-friendly (no 'Do not edit manually')
+    if "Do not edit manually" in parser_text:
+        print("  ❌ Parser grammar still contains auto-generated header")
         ok = False
+    else:
+        print("  ✅ Header is contribution-friendly")
 
     # Check pom.xml has correct entryPoint
     pom_text = (output_dir / "pom.xml").read_text()
@@ -447,11 +464,10 @@ def verify_contrib(output_dir: Path) -> bool:
             print("  ❌ desc.xml missing <inputs> element")
             ok = False
 
-        if entry_el is not None and entry_el.text == start_rule:
-            print(f"  ✅ desc.xml entry-point = {start_rule}")
+        if entry_el is not None:
+            print(f"  ✅ desc.xml entry-point = {entry_el.text}")
         else:
-            print("  ❌ desc.xml entry-point mismatch")
-            ok = False
+            print("  ℹ️  desc.xml has no <entry-point> (derived from pom.xml)")
     except ET.ParseError as e:
         print(f"  ❌ desc.xml is not valid XML: {e}")
         ok = False
