@@ -11,11 +11,8 @@ Open in GitHub Codespaces or VS Code Dev Containers — everything is pre-instal
 ### Manual Setup
 
 ```bash
-# Install runtime + dev dependencies (ruff, yamllint, actionlint, pip-audit)
-make install-dev
-
-# Download and SHA256-verify the ANTLR4 JAR
-make download-antlr
+# Install Python + dev dependencies (ruff, yamllint, actionlint, pip-audit)
+make install
 ```
 
 ### Common Commands
@@ -29,6 +26,8 @@ make format            # Auto-format Python scripts
 make contrib           # Build and verify grammars-v4 contribution
 make version           # Show current grammar version
 make bump-revision     # Bump revision (e.g. 2026.01.0 → 2026.01.1)
+make drift-check       # Check grammar matches generator output
+make clean             # Remove generated/cached artifacts
 make ci                # Run full CI pipeline locally
 make help              # Show all available targets
 ```
@@ -36,7 +35,7 @@ make help              # Show all available targets
 ### Generating for a Specific Release
 
 ```bash
-make generate TAG=2025-12
+make generate TAG=2026-01
 ```
 
 The generated `.g4` files are written to `grammar/`.
@@ -51,6 +50,7 @@ The generated `.g4` files are written to `grammar/`.
 ├── scripts/
 │   ├── generate_grammar.py  # KEBNF → ANTLR4 converter
 │   ├── build_contrib.py     # grammars-v4 contribution builder
+│   ├── bump_version.py      # Version revision bumper
 │   ├── find_cycles.py       # Left-recursion cycle detector
 │   ├── config.json          # Generator configuration
 │   ├── requirements.txt     # Python dependencies
@@ -60,9 +60,11 @@ The generated `.g4` files are written to `grammar/`.
 │   ├── vehicle-model.sysml
 │   ├── toaster-system.sysml
 │   └── camera.sysml
-└── .github/workflows/
-    ├── generate.yml          # CI: regenerate, validate, release
-    └── watch-upstream.yml    # Cron: detect new OMG releases
+└── .github/
+    ├── RELEASE_CHECKLIST.md  # Release process steps
+    └── workflows/
+        ├── generate.yml          # CI: regenerate, validate, release
+        └── watch-upstream.yml    # Cron: detect new OMG releases
 ```
 
 ## Grammar Generation Pipeline
@@ -88,40 +90,14 @@ The generated `.g4` files are written to `grammar/`.
 
 ## Using with ANTLR4
 
-### Java
+The grammar compiles to all ANTLR4 targets. Validate locally with:
 
 ```bash
-make download-antlr
-make validate
+make validate          # Compiles with Java + TypeScript targets
+make test              # Parses all example .sysml files
 ```
 
-Or directly:
-
-```bash
-java -jar .build/antlr4.jar -Dlanguage=Java \
-  grammar/SysMLv2Lexer.g4 grammar/SysMLv2Parser.g4
-```
-
-### TypeScript
-
-```bash
-make validate-ts
-```
-
-Or with post-processing for CommonJS compatibility:
-
-```bash
-java -jar .build/antlr4.jar -Dlanguage=TypeScript -visitor -no-listener \
-  grammar/SysMLv2Lexer.g4 grammar/SysMLv2Parser.g4
-node scripts/postprocess-antlr.js
-```
-
-### Python
-
-```bash
-java -jar .build/antlr4.jar -Dlanguage=Python3 \
-  grammar/SysMLv2Lexer.g4 grammar/SysMLv2Parser.g4
-```
+The ANTLR4 JAR is downloaded and SHA256-verified automatically on first use.
 
 ## CI / CD
 
@@ -141,7 +117,7 @@ a pull request with regenerated grammar files.
 
 ## Current Spec Version
 
-- **Grammar version**: `2026.01.0`
+- **Grammar version**: `2026.01.1`
 - **OMG release**: `2026-01`
 - **Source**: [Systems-Modeling/SysML-v2-Release](https://github.com/Systems-Modeling/SysML-v2-Release/tree/2026-01)
 
@@ -178,8 +154,7 @@ resets the version to `YYYY.MM.0`.
 This repo automates the creation of a ready-to-submit contribution for [antlr/grammars-v4](https://github.com/antlr/grammars-v4).
 
 ```bash
-make contrib           # Build contribution directory → contrib/sysml/sysmlv2/
-make contrib-verify    # Build + verify all grammars-v4 requirements
+make contrib           # Build and verify contribution → contrib/sysml/sysmlv2/
 ```
 
 The `contrib` target generates:
@@ -193,15 +168,8 @@ The `contrib` target generates:
 | `README.md` | Documentation with source references |
 | `examples/*.sysml` | Test input files |
 
-The CI pipeline builds and verifies the contribution on every push, and attaches a `grammars-v4-sysmlv2-<version>` artifact to each GitHub Release.
-
-To submit a PR:
-
-1. Fork [antlr/grammars-v4](https://github.com/antlr/grammars-v4)
-2. Copy `contrib/sysml/sysmlv2/` into your fork
-3. Add `<module>sysml/sysmlv2</module>` to the root `pom.xml`
-4. Run `cd sysml/sysmlv2 && mvn clean test`
-5. Open a PR against `antlr/grammars-v4:master`
+The CI pipeline builds and verifies the contribution on every push, and attaches
+a `grammars-v4-sysmlv2-<version>.zip` asset to each GitHub Release.
 
 ## Related Projects
 
