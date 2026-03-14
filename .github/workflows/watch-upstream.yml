@@ -100,6 +100,15 @@ jobs:
             scripts/config.json > scripts/config.json.tmp
           mv scripts/config.json.tmp scripts/config.json
 
+          # Update the "Current Spec Version" section in README.md
+          REPO=$(jq -r '.release_repo' scripts/config.json)
+          SOURCE_URL="https://github.com/${REPO}/tree/${LATEST}"
+          sed -i \
+            -e "s|- \*\*Grammar version\*\*: .*|- **Grammar version**: \`${NEW_VERSION}\`|" \
+            -e "s|- \*\*OMG release\*\*: .*|- **OMG release**: \`${LATEST}\`|" \
+            -e "s|- \*\*Source\*\*: .*|- **Source**: [Systems-Modeling/SysML-v2-Release](${SOURCE_URL})|" \
+            README.md
+
       - name: Create Pull Request
         if: steps.compare.outputs.new_release == 'true'
         env:

@@ -73,6 +73,7 @@ jobs:
             grammar/SysMLv2Parser.g4
             grammar/SysMLv2Lexer.g4
             grammar/SysMLv2Lexer.tokens
+            grammar/PATCHES.md
           if-no-files-found: error
 
   validate:
