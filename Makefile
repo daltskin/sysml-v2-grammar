@@ -1,4 +1,4 @@
-.PHONY: help install generate drift-check lint format validate test clean contrib version bump-revision ci
+.PHONY: help install install-dev generate lint lint-python lint-yaml lint-actions audit validate parse-examples clean download-antlr contrib contrib-verify
 
 PYTHON     ?= python3
 PIP        ?= pip
@@ -8,6 +8,7 @@ ANTLR_JAR  := $(BUILD_DIR)/antlr4.jar
 ANTLR_URL  := https://www.antlr.org/download/antlr-$(ANTLR_VER)-complete.jar
 ANTLR_SHA  := eae2dfa119a64327444672aff63e9ec35a20180dc5b8090b7a6ab85125df4d76
 TAG        ?=
+export PATH := $(HOME)/.local/bin:$(PATH)
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -17,12 +18,14 @@ help: ## Show this help
 # Setup
 # ---------------------------------------------------------------------------
 
-install: ## Install Python dependencies and dev tools
+install: ## Install runtime Python dependencies
 	$(PIP) install -r scripts/requirements.txt
+
+install-dev: install ## Install runtime + linting dependencies
 	$(PIP) install ruff yamllint actionlint-py pip-audit
 
 # ---------------------------------------------------------------------------
-# Grammar
+# Grammar generation
 # ---------------------------------------------------------------------------
 
 generate: ## Regenerate ANTLR4 grammar from OMG spec
@@ -37,13 +40,19 @@ drift-check: generate ## Check that committed grammar matches generator output
 	fi
 
 # ---------------------------------------------------------------------------
-# Lint & format
+# Linting
 # ---------------------------------------------------------------------------
 
-lint: ## Run all linters
+lint: lint-python lint-yaml lint-actions ## Run all linters
+
+lint-python: ## Lint Python scripts with ruff
 	ruff check scripts/
 	ruff format --check scripts/
-	yamllint .github/workflows/*.yml
+
+lint-yaml: ## Lint YAML files with yamllint
+	$(PYTHON) -m yamllint .github/workflows/*.yml
+
+lint-actions: ## Lint GitHub Actions workflows with actionlint
 	actionlint .github/workflows/*.yml
 
 format: ## Auto-format Python scripts
@@ -51,7 +60,14 @@ format: ## Auto-format Python scripts
 	ruff check --fix scripts/
 
 # ---------------------------------------------------------------------------
-# Validate & test (requires Java 17+)
+# Security
+# ---------------------------------------------------------------------------
+
+audit: ## Scan Python dependencies for known vulnerabilities
+	pip-audit -r scripts/requirements.txt
+
+# ---------------------------------------------------------------------------
+# Validation (requires Java 17+)
 # ---------------------------------------------------------------------------
 
 $(ANTLR_JAR):
@@ -59,23 +75,29 @@ $(ANTLR_JAR):
 	curl -fsSL -o $(ANTLR_JAR) $(ANTLR_URL)
 	echo "$(ANTLR_SHA)  $(ANTLR_JAR)" | sha256sum -c -
 
-validate: $(ANTLR_JAR) ## Compile grammar with ANTLR4 (Java + TypeScript)
-	@mkdir -p $(BUILD_DIR)/antlr-out $(BUILD_DIR)/antlr-out-ts
-	java -jar $(ANTLR_JAR) -Dlanguage=Java -o $(BUILD_DIR)/antlr-out \
-		grammar/SysMLv2Lexer.g4 grammar/SysMLv2Parser.g4
-	java -jar $(ANTLR_JAR) -Dlanguage=TypeScript -visitor -no-listener \
-		-o $(BUILD_DIR)/antlr-out-ts grammar/SysMLv2Lexer.g4 grammar/SysMLv2Parser.g4
-	@echo "✅ Grammar compiles successfully (Java + TypeScript)"
+download-antlr: $(ANTLR_JAR) ## Download and verify the ANTLR4 JAR
 
-test: $(ANTLR_JAR) ## Parse example .sysml files through the grammar
+validate: $(ANTLR_JAR) ## Compile grammar with ANTLR4 (Java target)
+	@mkdir -p $(BUILD_DIR)/antlr-out
+	java -jar $(ANTLR_JAR) -Dlanguage=Java -o $(BUILD_DIR)/antlr-out \
+		grammar/SysMLv2Lexer.g4 grammar/SysMLv2.g4
+	@echo "✅ Grammar compiles successfully"
+
+validate-ts: $(ANTLR_JAR) ## Compile grammar with ANTLR4 (TypeScript target)
+	@mkdir -p $(BUILD_DIR)/antlr-out-ts
+	java -jar $(ANTLR_JAR) -Dlanguage=TypeScript -visitor -no-listener \
+		-o $(BUILD_DIR)/antlr-out-ts grammar/SysMLv2Lexer.g4 grammar/SysMLv2.g4
+	@echo "✅ TypeScript target compiles successfully"
+
+parse-examples: $(ANTLR_JAR) ## Parse example .sysml files through the grammar
 	@mkdir -p $(BUILD_DIR)/antlr-test
 	java -jar $(ANTLR_JAR) -Dlanguage=Java -o $(BUILD_DIR)/antlr-test \
-		grammar/SysMLv2Lexer.g4 grammar/SysMLv2Parser.g4
+		grammar/SysMLv2Lexer.g4 grammar/SysMLv2.g4
 	cd $(BUILD_DIR)/antlr-test/grammar && javac -cp "$(CURDIR)/$(ANTLR_JAR):." *.java
 	@cd $(BUILD_DIR)/antlr-test/grammar && PASS=0; FAIL=0; \
 	for f in $(CURDIR)/examples/*.sysml; do \
 		printf "Parsing $$(basename $$f)... "; \
-		if java -cp "$(CURDIR)/$(ANTLR_JAR):." org.antlr.v4.gui.TestRig SysMLv2Parser rootNamespace "$$f" 2>&1 | grep -qi "error"; then \
+		if java -cp "$(CURDIR)/$(ANTLR_JAR):." org.antlr.v4.gui.TestRig SysMLv2 rootNamespace "$$f" 2>&1 | grep -qi "error"; then \
 			echo "❌ FAIL"; FAIL=$$((FAIL + 1)); \
 		else \
 			echo "✅ PASS"; PASS=$$((PASS + 1)); \
@@ -85,29 +107,26 @@ test: $(ANTLR_JAR) ## Parse example .sysml files through the grammar
 	[ $$FAIL -eq 0 ]
 
 # ---------------------------------------------------------------------------
+# Utilities
+# ---------------------------------------------------------------------------
+
+cycles: ## Detect left-recursion cycles in the grammar
+	$(PYTHON) scripts/find_cycles.py grammar/SysMLv2.g4
+
+clean: ## Remove generated/cached artifacts
+	rm -rf $(BUILD_DIR)
+	rm -rf .grammar-cache __pycache__ scripts/__pycache__
+	rm -rf grammar/.antlr
+	rm -rf contrib
+
+# ---------------------------------------------------------------------------
 # Contribution (grammars-v4)
 # ---------------------------------------------------------------------------
 
-contrib: ## Build and verify grammars-v4 contribution
+contrib: ## Build grammars-v4 contribution directory
+	$(PYTHON) scripts/build_contrib.py
+
+contrib-verify: ## Build and verify grammars-v4 contribution
 	$(PYTHON) scripts/build_contrib.py --verify
 
-# ---------------------------------------------------------------------------
-# Versioning
-# ---------------------------------------------------------------------------
-
-version: ## Show current grammar version and OMG release tag
-	@VERSION=$$(jq -r '.grammar_version' scripts/config.json); \
-	TAG=$$(jq -r '.release_tag' scripts/config.json); \
-	echo "Grammar version: $$VERSION (OMG release: $$TAG)"
-
-bump-revision: ## Bump the grammar revision (e.g. 2026.01.0 → 2026.01.1)
-	@$(PYTHON) scripts/bump_version.py
-
-# ---------------------------------------------------------------------------
-# Housekeeping
-# ---------------------------------------------------------------------------
-
-clean: ## Remove generated/cached artifacts
-	rm -rf $(BUILD_DIR) .grammar-cache __pycache__ scripts/__pycache__ grammar/.antlr contrib
-
-ci: lint drift-check validate test contrib ## Run full CI pipeline locally
+ci: lint audit drift-check validate parse-examples contrib-verify ## Run full CI pipeline locally

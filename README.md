@@ -72,7 +72,7 @@ The generated `.g4` files are written to `grammar/`.
 1. **Download**: Fetches `.kebnf` BNF files from the OMG SysML v2 Release repository
 2. **Parse**: Regex-based KEBNF parser extracts rules, terminals, and properties
 3. **Transform**: Converts to ANTLR4 format with precedence-climbing for expressions,
-   keyword extraction, and 12 spec-ambiguity patches
+   keyword extraction, and [spec-ambiguity patches](grammar/PATCHES.md)
 4. **Generate**: Writes split lexer/parser `.g4` grammars
 
 ## Configuration
@@ -117,9 +117,9 @@ a pull request with regenerated grammar files.
 
 ## Current Spec Version
 
-- **Grammar version**: `2026.01.1`
-- **OMG release**: `2026-01`
-- **Source**: [Systems-Modeling/SysML-v2-Release](https://github.com/Systems-Modeling/SysML-v2-Release/tree/2026-01)
+- **Grammar version**: `2026.02.0`
+- **OMG release**: `2026-02`
+- **Source**: [Systems-Modeling/SysML-v2-Release](https://github.com/Systems-Modeling/SysML-v2-Release/tree/2026-02)
 
 ## Versioning
 

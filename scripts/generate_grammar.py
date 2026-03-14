@@ -788,7 +788,36 @@ class Antlr4Transformer:
 
         The SysML v2 BNF spec has some patterns that produce redundant keywords
         when flattened into an ANTLR4 grammar. These patches fix them.
+
+        Each patch is recorded in self.applied_patches for documentation.
         """
+        self.applied_patches: List[Dict[str, str]] = []
+
+        def patch(
+            fix_id: str,
+            category: str,
+            summary: str,
+            description: str,
+            old: str,
+            new: str,
+            *,
+            rules: str = "",
+        ) -> None:
+            """Apply a single patch and record it."""
+            nonlocal grammar
+            prev = grammar
+            grammar = grammar.replace(old, new)
+            applied = grammar != prev
+            self.applied_patches.append(
+                {
+                    "id": fix_id,
+                    "category": category,
+                    "summary": summary,
+                    "description": description,
+                    "rules": rules,
+                    "applied": applied,
+                }
+            )
 
         # Fix 1: entryTransitionMember has 'THEN targetSuccession' but
         # targetSuccession = sourceEndMember THEN connectorEndMember, where
@@ -796,88 +825,145 @@ class Antlr4Transformer:
         # Fix: Replace 'THEN targetSuccession' with 'THEN transitionSuccessionMember'
         # (transitionSuccessionMember = emptyEndMember connectorEndMember, where
         # emptyEndMember is empty, so it just matches connectorEndMember)
-        grammar = grammar.replace(
+        patch(
+            "1",
+            "Spec BNF fix",
+            "Double-THEN in `entryTransitionMember`",
+            "`targetSuccession` expands to `sourceEndMember THEN connectorEndMember` where "
+            "`sourceEndMember` is empty, producing a double `THEN` keyword. Replaced with "
+            "`transitionSuccessionMember` which skips the empty source end.",
             "entryTransitionMember\n"
             "    : memberPrefix ( guardedTargetSuccession | THEN targetSuccession ) SEMI",
             "entryTransitionMember\n"
             "    : memberPrefix ( guardedTargetSuccession | THEN transitionSuccessionMember ) SEMI",
+            rules="entryTransitionMember",
         )
 
         # Fix 2: defaultTargetSuccession has similar double-THEN issue.
-        # defaultTargetSuccession = sourceEndMember THEN connectorEndMember
-        # When used as 'THEN defaultTargetSuccession' in other rules, it creates
-        # double-THEN. Fix: use emptyEndMember before THEN in the rule itself.
         # (No-op for now - only fix if tests expose this)
+        self.applied_patches.append(
+            {
+                "id": "2",
+                "category": "Spec BNF fix",
+                "summary": "Double-THEN in `defaultTargetSuccession` (reserved)",
+                "description": "`defaultTargetSuccession` = `sourceEndMember THEN connectorEndMember`. "
+                "When used as `THEN defaultTargetSuccession`, it creates a double `THEN`. "
+                "No-op for now — only applied if tests expose the issue.",
+                "rules": "defaultTargetSuccession",
+                "applied": False,
+            }
+        )
 
         # Fix 3: satisfyRequirementUsage has ( NOT ) but NOT should be optional.
-        # The KEBNF spec uses ( isNegated ?= 'not' ) without explicit ?, but the
-        # ?= boolean assignment semantically implies optionality.
-        grammar = grammar.replace("ASSERT ( NOT ) SATISFY", "ASSERT ( NOT )? SATISFY")
+        patch(
+            "3",
+            "Spec BNF fix",
+            "Make `NOT` optional in `satisfyRequirementUsage`",
+            "The KEBNF uses `isNegated ?= 'not'` without explicit `?`, but the `?=` boolean "
+            "assignment semantically implies optionality.",
+            "ASSERT ( NOT ) SATISFY",
+            "ASSERT ( NOT )? SATISFY",
+            rules="satisfyRequirementUsage",
+        )
 
         # Fix 4: libraryPackage has ( STANDARD ) but STANDARD should be optional.
-        # Same ?= boolean assignment issue.
-        grammar = grammar.replace(": ( STANDARD ) LIBRARY", ": ( STANDARD )? LIBRARY")
+        patch(
+            "4",
+            "Spec BNF fix",
+            "Make `STANDARD` optional in `libraryPackage`",
+            "Same `?=` boolean assignment issue as Fix 3.",
+            ": ( STANDARD ) LIBRARY",
+            ": ( STANDARD )? LIBRARY",
+            rules="libraryPackage",
+        )
 
         # Fix 5: importRule has visibilityIndicator as required, but it should
-        # be optional. The KEBNF uses 'visibility = VisibilityIndicator' without
-        # explicit ( )? wrapper, unlike memberPrefix which uses
-        # '( visibility = VisibilityIndicator )?'. The generator strips the
-        # property assignment but doesn't infer optionality from the = operator.
-        # In practice, 'import Foo::*;' is valid without a visibility prefix.
-        grammar = grammar.replace(
+        # be optional.
+        patch(
+            "5",
+            "Spec BNF fix",
+            "Make `visibilityIndicator` optional in `importRule`",
+            "The KEBNF uses `visibility = VisibilityIndicator` without an explicit `( )?` wrapper, "
+            "unlike `memberPrefix` which uses `( visibility = VisibilityIndicator )?`. "
+            "In practice, `import Foo::*;` is valid without a visibility prefix.",
             "importRule\n    : visibilityIndicator IMPORT",
             "importRule\n    : ( visibilityIndicator )? IMPORT",
+            rules="importRule",
         )
 
         # Fix 6: allocationDefinition is defined as a rule but not included in
-        # definitionElement. This is an omission in the official SysML v2 BNF
-        # spec (2025-12). AllocationUsage IS in StructureUsageElement, but
-        # AllocationDefinition was not added to DefinitionElement.
-        grammar = grammar.replace(
+        # definitionElement.
+        patch(
+            "6",
+            "Spec BNF fix",
+            "Add `allocationDefinition` to `definitionElement`",
+            "An omission in the official SysML v2 BNF spec. `AllocationUsage` IS in "
+            "`StructureUsageElement`, but `AllocationDefinition` was not added to "
+            "`DefinitionElement`.",
             "    | metadataDefinition\n    | extendedDefinition",
             "    | metadataDefinition\n"
             "    | allocationDefinition\n"
             "    | extendedDefinition",
+            rules="definitionElement",
         )
 
         # Fix 7: satisfyRequirementUsage requires 'assert' before 'satisfy' in
-        # the 2025-12 BNF, but the official OMG reference model (2025-10 release)
-        # uses 'satisfy' without 'assert'. Make 'assert' optional for
-        # backward compatibility with canonical examples.
-        grammar = grammar.replace(
-            "ASSERT ( NOT )? SATISFY", "( ASSERT ( NOT )? )? SATISFY"
+        # the BNF, but the official OMG reference model uses 'satisfy' without
+        # 'assert'. Make 'assert' optional for backward compatibility.
+        patch(
+            "7",
+            "Spec BNF fix",
+            "Make `ASSERT` optional before `SATISFY`",
+            "The OMG reference model (2025-10 release) uses `satisfy` without `assert`. "
+            "Made optional for backward compatibility with canonical examples.",
+            "ASSERT ( NOT )? SATISFY",
+            "( ASSERT ( NOT )? )? SATISFY",
+            rules="satisfyRequirementUsage",
         )
 
         # Fix 8: sendNode uses ActionUsageDeclaration? (no keyword) but the
         # official OMG reference model uses 'action <name> send ...' pattern.
-        # AcceptNode uses ActionNodeUsageDeclaration? (with 'action' keyword)
-        # via AcceptNodeDeclaration. Apply same pattern to sendNode.
-        grammar = grammar.replace(
+        patch(
+            "8",
+            "Spec BNF fix",
+            "Add `ACTION` keyword support to `sendNode`",
+            "`AcceptNode` uses `ActionNodeUsageDeclaration?` (with `action` keyword) via "
+            "`AcceptNodeDeclaration`. Apply same pattern to `sendNode`.",
             "sendNode\n    : occurrenceUsagePrefix actionUsageDeclaration? SEND",
             "sendNode\n"
             "    : occurrenceUsagePrefix ( actionNodeUsageDeclaration | actionUsageDeclaration )? SEND",
+            rules="sendNode",
         )
 
-        # Fix 9: CaseBody (used by analysis, use case, etc.) does not include
-        # ReturnParameterMember in CaseBodyItem, but CalculationBody does.
-        # The canonical OMG reference model uses 'return' inside analysis blocks.
-        # Since analysis extends calculation in the SysML metamodel, add
-        # returnParameterMember to caseBodyItem.
-        grammar = grammar.replace(
+        # Fix 9: CaseBody does not include ReturnParameterMember in CaseBodyItem,
+        # but CalculationBody does.
+        patch(
+            "9",
+            "Spec BNF fix",
+            "Add `returnParameterMember` to `caseBodyItem`",
+            "The canonical OMG reference model uses `return` inside analysis blocks. "
+            "Since analysis extends calculation in the SysML metamodel, `returnParameterMember` "
+            "should be valid in case bodies.",
             "caseBodyItem\n    : actionBodyItem\n    | subjectMember",
             "caseBodyItem\n"
             "    : actionBodyItem\n"
             "    | returnParameterMember\n"
             "    | subjectMember",
+            rules="caseBodyItem",
         )
 
         # Fix 10: calculationUsageDeclaration is referenced but never defined in
-        # the KEBNF spec. It's semantically identical to constraintUsageDeclaration
-        # (= usageDeclaration valuePart?). Replace the stub.
-        grammar = grammar.replace(
+        # the KEBNF spec.
+        patch(
+            "10",
+            "Spec BNF fix",
+            "Define missing `calculationUsageDeclaration`",
+            "Referenced but never defined in the KEBNF spec. Semantically identical to "
+            "`constraintUsageDeclaration` (`usageDeclaration valuePart?`).",
             "calculationUsageDeclaration\n"
             "    : IDENTIFIER  /* TODO: stub for calculationUsageDeclaration */",
             "calculationUsageDeclaration\n    : usageDeclaration? valuePart?",
+            rules="calculationUsageDeclaration",
         )
 
         # Fix 11: SLL mode ambiguity with qualifiedName | ownedFeatureChain.
@@ -893,6 +979,8 @@ class Antlr4Transformer:
         #   qualifiedName ( DOT qualifiedName )*
         # This handles both simple names and dot-separated feature chains.
 
+        fix11_rules = []
+
         # Pattern A: Rules with 'generalType | qualifiedName | ownedFeatureChain'
         for rule_name in [
             "ownedSubsetting",
@@ -901,6 +989,7 @@ class Antlr4Transformer:
             "ownedRedefinition",
             "ownedFeatureTyping",
         ]:
+            prev = grammar
             grammar = grammar.replace(
                 f"{rule_name}\n"
                 f"    : generalType\n"
@@ -909,6 +998,8 @@ class Antlr4Transformer:
                 f"    ;",
                 f"{rule_name}\n    : qualifiedName ( DOT qualifiedName )*\n    ;",
             )
+            if grammar != prev:
+                fix11_rules.append(rule_name)
 
         # Pattern B: Rules with 'qualifiedName | ownedFeatureChain'
         for rule_name in [
@@ -919,19 +1010,26 @@ class Antlr4Transformer:
             "differencing",
             "ownedFeatureInverting",
         ]:
+            prev = grammar
             grammar = grammar.replace(
                 f"{rule_name}\n    : qualifiedName\n    | ownedFeatureChain\n    ;",
                 f"{rule_name}\n    : qualifiedName ( DOT qualifiedName )*\n    ;",
             )
+            if grammar != prev:
+                fix11_rules.append(rule_name)
 
         # Pattern C: Rules with 'qualifiedName | featureChain'
         for rule_name in ["ownedConjugation", "ownedDisjoining"]:
+            prev = grammar
             grammar = grammar.replace(
                 f"{rule_name}\n    : qualifiedName\n    | featureChain\n    ;",
                 f"{rule_name}\n    : qualifiedName ( DOT qualifiedName )*\n    ;",
             )
+            if grammar != prev:
+                fix11_rules.append(rule_name)
 
         # Pattern D: featureChainMember has 3 alternatives that overlap
+        prev = grammar
         grammar = grammar.replace(
             "featureChainMember\n"
             "    : featureReferenceMember\n"
@@ -940,8 +1038,11 @@ class Antlr4Transformer:
             "    ;",
             "featureChainMember\n    : qualifiedName ( DOT qualifiedName )*\n    ;",
         )
+        if grammar != prev:
+            fix11_rules.append("featureChainMember")
 
         # Pattern E: instantiatedTypeMember overlaps
+        prev = grammar
         grammar = grammar.replace(
             "instantiatedTypeMember\n"
             "    : instantiatedTypeReference\n"
@@ -949,6 +1050,8 @@ class Antlr4Transformer:
             "    ;",
             "instantiatedTypeMember\n    : qualifiedName ( DOT qualifiedName )*\n    ;",
         )
+        if grammar != prev:
+            fix11_rules.append("instantiatedTypeMember")
 
         # Pattern F: Inline ( qualifiedName | featureChain ) in rules
         grammar = grammar.replace(
@@ -967,20 +1070,42 @@ class Antlr4Transformer:
             "qualifiedName ( DOT qualifiedName )*",
         )
 
+        self.applied_patches.append(
+            {
+                "id": "11",
+                "category": "SLL prediction fix",
+                "summary": "Merge `qualifiedName | ownedFeatureChain` alternatives",
+                "description": "ANTLR4's SLL prediction mode can't distinguish `qualifiedName` from "
+                "`ownedFeatureChain` because they share the same prefix. Merged ~15 rules with "
+                "`qualifiedName | ownedFeatureChain` patterns into `qualifiedName ( DOT qualifiedName )*`. "
+                "Patterns A–H cover named rules, inline alternatives, and `featureChain` variants.",
+                "rules": ", ".join(fix11_rules)
+                if fix11_rules
+                else "(inline replacements)",
+                "applied": bool(fix11_rules),
+            }
+        )
+
         # Fix 12: flowEnd rule has ( ownedReferenceSubsetting DOT )? which
         # conflicts with Fix 11. ownedReferenceSubsetting now consumes dots
         # greedily, so the explicit DOT is never reached. flowEnd is
         # semantically a feature chain (prefix.flowFeature), so simplify it.
-        grammar = grammar.replace(
+        patch(
+            "12",
+            "SLL prediction fix",
+            "Simplify `flowEnd` after feature chain merge",
+            "`ownedReferenceSubsetting` now consumes dots greedily (Fix 11), so the explicit "
+            "`DOT` in `flowEnd` is never reached. Simplified to `qualifiedName ( DOT qualifiedName )*`.",
             "flowEnd\n"
             "    : ( ownedReferenceSubsetting DOT )? flowFeatureMember\n"
             "    | ( flowEndSubsetting )? flowFeatureMember\n"
             "    ;",
             "flowEnd\n    : qualifiedName ( DOT qualifiedName )*\n    ;",
+            rules="flowEnd",
         )
 
         # ============================================================
-        # Extension compatibility patches (Fix 13–25)
+        # Extension compatibility patches (Fix 13–37)
         #
         # These patches align the generated grammar with the VS Code
         # SysML extension's parser requirements. They handle:
@@ -991,20 +1116,23 @@ class Antlr4Transformer:
         # ============================================================
 
         # Fix 13: Rewrite the identification rule.
-        # The generator produces '( LT name GT )? ( name )?' which can match
-        # the empty string. Rewrite to explicit alternatives that each require
-        # at least one component, matching KerML Identification semantics.
-        grammar = grammar.replace(
+        patch(
+            "13",
+            "Extension compatibility",
+            "Rewrite `identification` to prevent empty match",
+            "The generator produces `( LT name GT )? ( name )?` which can match the empty string. "
+            "Rewritten to explicit alternatives that each require at least one component.",
             "identification\n    : ( LT name GT )? ( name )?\n    ;",
             "identification\n"
             "    : LT name GT name\n"
             "    | LT name GT\n"
             "    | name\n"
             "    ;",
+            rules="identification",
         )
 
         # Fix 14: Make identification optional in annotation-related rules.
-        # SysML allows anonymous comments, documentation, and representations.
+        prev = grammar
         grammar = grammar.replace(
             ": ( COMMENT identification ( ABOUT",
             ": ( COMMENT identification? ( ABOUT",
@@ -1017,21 +1145,36 @@ class Antlr4Transformer:
             ": ( REP identification )? LANGUAGE",
             ": ( REP identification? )? LANGUAGE",
         )
+        self.applied_patches.append(
+            {
+                "id": "14",
+                "category": "Extension compatibility",
+                "summary": "Optional `identification` in annotation rules",
+                "description": "SysML allows anonymous comments, documentation, and representations. "
+                "Made `identification` optional in comment, doc, and rep declarations.",
+                "rules": "commentAnnotation, documentation, textualRepresentation",
+                "applied": grammar != prev,
+            }
+        )
 
         # Fix 15: rootNamespace should only match packageBodyElement* EOF.
-        # The namespaceBodyElement* alternative is redundant since
-        # packageBodyElement encompasses all valid top-level elements.
-        # EOF ensures the parser consumes the entire input.
-        grammar = grammar.replace(
+        patch(
+            "15",
+            "Structural optimization",
+            "Simplify `rootNamespace` to `packageBodyElement* EOF`",
+            "The `namespaceBodyElement*` alternative is redundant since `packageBodyElement` "
+            "encompasses all valid top-level elements. `EOF` ensures the parser consumes the entire input.",
             "rootNamespace\n"
             "    : namespaceBodyElement*\n"
             "    | packageBodyElement*\n"
             "    ;",
             "rootNamespace\n    : packageBodyElement* EOF\n    ;",
+            rules="rootNamespace",
         )
 
         # Fix 16: Make identification optional in namespace/type/classifier
-        # declarations. SysML allows anonymous definitions everywhere.
+        # declarations.
+        prev = grammar
         grammar = grammar.replace(
             "namespaceDeclaration\n    : NAMESPACE identification\n",
             "namespaceDeclaration\n    : NAMESPACE identification?\n",
@@ -1046,8 +1189,20 @@ class Antlr4Transformer:
             "classifierDeclaration\n"
             "    : ( ALL )? identification? ( ownedMultiplicity )?",
         )
+        self.applied_patches.append(
+            {
+                "id": "16",
+                "category": "Extension compatibility",
+                "summary": "Optional `identification` in namespace/type/classifier declarations",
+                "description": "SysML allows anonymous definitions. Made `identification` optional in "
+                "`namespaceDeclaration`, `typeDeclaration`, and `classifierDeclaration`.",
+                "rules": "namespaceDeclaration, typeDeclaration, classifierDeclaration",
+                "applied": grammar != prev,
+            }
+        )
 
         # Fix 17: Make identification optional in relationship declarations.
+        prev = grammar
         grammar = grammar.replace(
             ": ( SPECIALIZATION identification )? SUBTYPE",
             ": ( SPECIALIZATION identification? )? SUBTYPE",
@@ -1080,9 +1235,23 @@ class Antlr4Transformer:
             ": FEATURING ( identification OF )?",
             ": FEATURING ( identification? OF )?",
         )
+        self.applied_patches.append(
+            {
+                "id": "17",
+                "category": "Extension compatibility",
+                "summary": "Optional `identification` in relationship declarations",
+                "description": "Made `identification` optional in specialization, conjugation, disjoining, "
+                "subclassifier, typing, subset, redefinition, and featuring declarations.",
+                "rules": "subtypeDeclaration, conjugationDeclaration, disjoiningDeclaration, "
+                "subclassificationDeclaration, featureTypingDeclaration, subsettingDeclaration, "
+                "redefinitionDeclaration, featuringDeclaration",
+                "applied": grammar != prev,
+            }
+        )
 
         # Fix 18: Make identification optional in definition/package/multiplicity
         # and other declaration rules.
+        prev = grammar
         grammar = grammar.replace(
             "definitionDeclaration\n    : identification subclassificationPart?",
             "definitionDeclaration\n    : identification? subclassificationPart?",
@@ -1099,64 +1268,6 @@ class Antlr4Transformer:
             "multiplicityRange\n    : MULTIPLICITY identification multiplicityBounds",
             "multiplicityRange\n    : MULTIPLICITY identification? multiplicityBounds",
         )
-
-        # Fix 18b: Remove bare-bracket alternative from multiplicityRange.
-        # The KerML and SysML specs each define MultiplicityRange — KerML
-        # with the 'multiplicity' keyword and SysML with bare brackets.
-        # The generator merges both into alternatives, but the bare-bracket
-        # form duplicates ownedMultiplicityRange → multiplicityBounds,
-        # creating an ambiguity in ownedMultiplicity.  Remove it here since
-        # the bracket path is already covered by multiplicityBounds.
-        grammar = grammar.replace(
-            "multiplicityRange\n"
-            "    : MULTIPLICITY identification? multiplicityBounds typeBody\n"
-            "    | LBRACK ( multiplicityExpressionMember DOT_DOT )?"
-            " multiplicityExpressionMember RBRACK\n"
-            "    ;",
-            "multiplicityRange\n"
-            "    : MULTIPLICITY identification? multiplicityBounds typeBody\n"
-            "    ;",
-        )
-
-        # Fix 18c: Remove multiplicityRange from ownedMultiplicity.
-        # The OMG spec defines OwnedMultiplicity = OwnedMultiplicityRange.
-        # The generator merges KerML/SysML definitions, which adds
-        # multiplicityRange as a second alternative. But multiplicityRange
-        # is a declaration-level rule (starts with MULTIPLICITY keyword),
-        # not an inline modifier like ownedMultiplicityRange (bare [bounds]).
-        grammar = grammar.replace(
-            "ownedMultiplicity\n"
-            "    : ownedMultiplicityRange\n"
-            "    | multiplicityRange\n"
-            "    ;",
-            "ownedMultiplicity\n    : ownedMultiplicityRange\n    ;",
-        )
-
-        # Fix 18d: Merge KerML/SysML typedBy alternatives to fix ambiguity.
-        # KerML defines TypedBy with (COLON | TYPED BY) ownedFeatureTyping.
-        # SysML overrides it with (COLON | DEFINED BY) featureTyping.
-        # The generator merges both as alternatives, but since featureTyping
-        # includes ownedFeatureTyping, the COLON prefix is ambiguous.
-        # Fix: merge into one alternative using featureTyping (the superset).
-        grammar = grammar.replace(
-            "typedBy\n"
-            "    : ( COLON | TYPED BY ) ownedFeatureTyping\n"
-            "    | ( COLON | DEFINED BY ) featureTyping\n"
-            "    ;",
-            "typedBy\n    : ( COLON | TYPED BY | DEFINED BY ) featureTyping\n    ;",
-        )
-
-        # Fix 18e: Merge KerML/SysML typings alternatives to fix ambiguity.
-        # Same issue: ownedFeatureTyping vs featureTyping in comma-separated
-        # list. featureTyping is the superset, so use it for both.
-        grammar = grammar.replace(
-            "typings\n"
-            "    : typedBy ( COMMA ownedFeatureTyping )*\n"
-            "    | typedBy ( COMMA featureTyping )*\n"
-            "    ;",
-            "typings\n    : typedBy ( COMMA featureTyping )*\n    ;",
-        )
-
         grammar = grammar.replace(
             "dependencyDeclaration\n    : ( identification FROM )?",
             "dependencyDeclaration\n    : ( identification? FROM )?",
@@ -1171,22 +1282,109 @@ class Antlr4Transformer:
             "metadataUsageDeclaration\n    : ( identification ( COLON | TYPED BY ) )?",
             "metadataUsageDeclaration\n    : ( identification? ( COLON | TYPED BY ) )?",
         )
+        self.applied_patches.append(
+            {
+                "id": "18",
+                "category": "Extension compatibility",
+                "summary": "Optional `identification` in definitions, packages, and other declarations",
+                "description": "Made `identification` optional in `definitionDeclaration`, "
+                "`packageDeclaration`, `multiplicitySubset`, `multiplicityRange`, "
+                "`dependencyDeclaration`, `metadataFeatureDeclaration`, and `metadataUsageDeclaration`.",
+                "rules": "definitionDeclaration, packageDeclaration, multiplicitySubset, "
+                "multiplicityRange, dependencyDeclaration, metadataFeatureDeclaration, "
+                "metadataUsageDeclaration",
+                "applied": grammar != prev,
+            }
+        )
+
+        # Fix 18b: Remove bare-bracket alternative from multiplicityRange.
+        patch(
+            "18b",
+            "KerML/SysML merge fix",
+            "Remove bare-bracket alternative from `multiplicityRange`",
+            "The KerML and SysML specs each define `MultiplicityRange`. The generator merges both "
+            "into alternatives, but the bare-bracket form duplicates `ownedMultiplicityRange`, "
+            "creating an ambiguity in `ownedMultiplicity`.",
+            "multiplicityRange\n"
+            "    : MULTIPLICITY identification? multiplicityBounds typeBody\n"
+            "    | LBRACK ( multiplicityExpressionMember DOT_DOT )?"
+            " multiplicityExpressionMember RBRACK\n"
+            "    ;",
+            "multiplicityRange\n"
+            "    : MULTIPLICITY identification? multiplicityBounds typeBody\n"
+            "    ;",
+            rules="multiplicityRange",
+        )
+
+        # Fix 18c: Remove multiplicityRange from ownedMultiplicity.
+        patch(
+            "18c",
+            "KerML/SysML merge fix",
+            "Remove `multiplicityRange` from `ownedMultiplicity`",
+            "`multiplicityRange` is a declaration-level rule (starts with `MULTIPLICITY` keyword), "
+            "not an inline modifier like `ownedMultiplicityRange` (bare `[bounds]`).",
+            "ownedMultiplicity\n"
+            "    : ownedMultiplicityRange\n"
+            "    | multiplicityRange\n"
+            "    ;",
+            "ownedMultiplicity\n    : ownedMultiplicityRange\n    ;",
+            rules="ownedMultiplicity",
+        )
+
+        # Fix 18d: Merge KerML/SysML typedBy alternatives to fix ambiguity.
+        patch(
+            "18d",
+            "KerML/SysML merge fix",
+            "Merge `typedBy` alternatives",
+            "KerML defines `TypedBy` with `(COLON | TYPED BY) ownedFeatureTyping`. SysML overrides "
+            "with `(COLON | DEFINED BY) featureTyping`. Since `featureTyping` includes "
+            "`ownedFeatureTyping`, the `COLON` prefix is ambiguous. Merged into one alternative.",
+            "typedBy\n"
+            "    : ( COLON | TYPED BY ) ownedFeatureTyping\n"
+            "    | ( COLON | DEFINED BY ) featureTyping\n"
+            "    ;",
+            "typedBy\n    : ( COLON | TYPED BY | DEFINED BY ) featureTyping\n    ;",
+            rules="typedBy",
+        )
+
+        # Fix 18e: Merge KerML/SysML typings alternatives to fix ambiguity.
+        patch(
+            "18e",
+            "KerML/SysML merge fix",
+            "Merge `typings` alternatives",
+            "Same issue as 18d: `ownedFeatureTyping` vs `featureTyping` in comma-separated list. "
+            "`featureTyping` is the superset, so use it for both.",
+            "typings\n"
+            "    : typedBy ( COMMA ownedFeatureTyping )*\n"
+            "    | typedBy ( COMMA featureTyping )*\n"
+            "    ;",
+            "typings\n    : typedBy ( COMMA featureTyping )*\n    ;",
+            rules="typings",
+        )
 
         # Fix 19: Remove extra namespaceBodyElement alternative from packageBody.
-        # The extension uses only packageBodyElement* for package bodies.
-        grammar = grammar.replace(
+        patch(
+            "19",
+            "Structural optimization",
+            "Simplify `packageBody` alternatives",
+            "Removed the `namespaceBodyElement | elementFilterMember` alternative. "
+            "The extension uses only `packageBodyElement*` for package bodies.",
             "packageBody\n"
             "    : SEMI\n"
             "    | LBRACE ( namespaceBodyElement | elementFilterMember )* RBRACE\n"
             "    | LBRACE packageBodyElement* RBRACE\n"
             "    ;",
             "packageBody\n    : SEMI\n    | LBRACE packageBodyElement* RBRACE\n    ;",
+            rules="packageBody",
         )
 
         # Fix 20: multiplicityPart restructuring.
-        # Make the ordering keywords combinable with ownedMultiplicity in a
-        # single branch, matching the extension's interpretation.
-        grammar = grammar.replace(
+        patch(
+            "20",
+            "Structural optimization",
+            "Restructure `multiplicityPart` ordering keywords",
+            "Made the ordering keywords (`ORDERED`, `NONUNIQUE`) combinable with "
+            "`ownedMultiplicity` in a single branch.",
             "multiplicityPart\n"
             "    : ownedMultiplicity\n"
             "    | ( ownedMultiplicity )? ( ORDERED ( NONUNIQUE )? | NONUNIQUE ( ORDERED )? )\n"
@@ -1195,33 +1393,42 @@ class Antlr4Transformer:
             "    : ownedMultiplicity ( ORDERED ( NONUNIQUE )? | NONUNIQUE ( ORDERED )? )?\n"
             "    | ( ORDERED ( NONUNIQUE )? | NONUNIQUE ( ORDERED )? )\n"
             "    ;",
+            rules="multiplicityPart",
         )
 
         # Fix 21: resultExpressionMember simplification.
-        # The generator produces two alternatives where the second subsumes
-        # the first. Collapse to single optional-prefix alternative.
-        grammar = grammar.replace(
+        patch(
+            "21",
+            "Structural optimization",
+            "Collapse redundant `resultExpressionMember` alternatives",
+            "The generator produces two alternatives where the second (`memberPrefix?`) subsumes "
+            "the first (`memberPrefix`). Collapsed to a single alternative.",
             "resultExpressionMember\n"
             "    : memberPrefix ownedExpression\n"
             "    | memberPrefix? ownedExpression\n"
             "    ;",
             "resultExpressionMember\n    : memberPrefix? ownedExpression\n    ;",
+            rules="resultExpressionMember",
         )
 
         # Fix 22: SLL baseExpression optimization.
-        # Merge featureReferenceExpression, metadataAccessExpression, and
-        # invocationExpression into a single alternative that avoids SLL
-        # prediction ambiguity on qualifiedName lookahead.
-        grammar = grammar.replace(
+        patch(
+            "22",
+            "SLL prediction fix",
+            "Merge expression alternatives in `baseExpression`",
+            "Merged `featureReferenceExpression`, `metadataAccessExpression`, and "
+            "`invocationExpression` into a single alternative that avoids SLL prediction "
+            "ambiguity on `qualifiedName` lookahead.",
             "    | featureReferenceExpression\n"
             "    | metadataAccessExpression\n"
             "    | invocationExpression\n",
             "    | qualifiedName ( argumentList | DOT METADATA )?   "
             "// merged featureRef/metadataAccess/invocation\n",
+            rules="baseExpression",
         )
 
         # Fix 23: Make usageDeclaration optional and add featureSpecializationPart.
-        # Anonymous usages are common in SysML (e.g., 'part :> Vehicle;').
+        prev = grammar
         grammar = grammar.replace(
             "usage\n    : usageDeclaration usageCompletion\n    ;",
             "usage\n    : usageDeclaration? usageCompletion\n    ;",
@@ -1233,9 +1440,25 @@ class Antlr4Transformer:
             "    | featureSpecializationPart\n"
             "    ;",
         )
+        self.applied_patches.append(
+            {
+                "id": "23",
+                "category": "Extension compatibility",
+                "summary": "Optional `usageDeclaration` and anonymous usages",
+                "description": "Anonymous usages are common in SysML (e.g., `part :> Vehicle;`). "
+                "Made `usageDeclaration` optional in `usage` and added `featureSpecializationPart` "
+                "as a standalone alternative in `usageDeclaration`.",
+                "rules": "usage, usageDeclaration",
+                "applied": grammar != prev,
+            }
+        )
 
         # Fix 24: Make usageDeclaration optional in ownedCrossFeature.
-        grammar = grammar.replace(
+        patch(
+            "24",
+            "Extension compatibility",
+            "Optional `usageDeclaration` in `ownedCrossFeature`",
+            "Made `usageDeclaration` optional in the `basicUsagePrefix` alternative.",
             "ownedCrossFeature\n"
             "    : basicFeaturePrefix featureDeclaration\n"
             "    | basicUsagePrefix usageDeclaration\n"
@@ -1244,14 +1467,17 @@ class Antlr4Transformer:
             "    : basicFeaturePrefix featureDeclaration\n"
             "    | basicUsagePrefix usageDeclaration?\n"
             "    ;",
+            rules="ownedCrossFeature",
         )
 
         # Fix 25: SLL definitionBodyItem factoring.
-        # Replace the 6-alternative definitionBodyItem with a factored version.
-        # After memberPrefix is consumed, the next token (ALIAS, VARIANT,
-        # keyword, or identifier) unambiguously selects the branch, reducing
-        # the SLL prediction DFA from 6 nullable-prefix alternatives to 3+4.
-        grammar = grammar.replace(
+        patch(
+            "25",
+            "SLL prediction fix",
+            "Factor `definitionBodyItem` for SLL prediction",
+            "Replaced the 6-alternative `definitionBodyItem` with a factored version. After "
+            "`memberPrefix` is consumed, the next token (`ALIAS`, `VARIANT`, keyword, or "
+            "identifier) unambiguously selects the branch, reducing the SLL prediction DFA.",
             "definitionBodyItem\n"
             "    : definitionMember\n"
             "    | variantUsageMember\n"
@@ -1275,12 +1501,11 @@ class Antlr4Transformer:
             "    | definitionElement\n"
             "    | nonOccurrenceUsageElement\n"
             "    ;",
+            rules="definitionBodyItem, definitionBodyItemContent",
         )
 
         # Fix 26: Add endFeatureUsage rule and update nonOccurrenceUsageElement.
-        # Handles unnamed end features with specialization in connection/flow/
-        # interface definition bodies (e.g., 'end :>> QualifiedName;').
-        # Also repositions variantReference to after endFeatureUsage.
+        prev = grammar
         grammar = grammar.replace(
             "variantReference\n"
             "    : ownedReferenceSubsetting featureSpecialization* usageBody\n"
@@ -1306,10 +1531,6 @@ class Antlr4Transformer:
             "    | endFeatureUsage\n"
             "    | attributeUsage\n",
         )
-        # Also remove the defaultReferenceUsage that was moved to the end
-        # (it's now after extendedUsage in the extension's ordering).
-        # The replacement above already omits defaultReferenceUsage from
-        # its original position, so we need to add it back at the end.
         grammar = grammar.replace(
             "    | successionAsUsage\n    | extendedUsage\n    ;",
             "    | successionAsUsage\n"
@@ -1317,8 +1538,21 @@ class Antlr4Transformer:
             "    | defaultReferenceUsage\n"
             "    ;",
         )
+        self.applied_patches.append(
+            {
+                "id": "26",
+                "category": "Extension compatibility",
+                "summary": "Add `endFeatureUsage` rule; reorder `nonOccurrenceUsageElement`",
+                "description": "Handles unnamed end features with specialization in connection/flow/"
+                "interface definition bodies (e.g., `end :>> QualifiedName;`). Also repositions "
+                "`defaultReferenceUsage` to end of `nonOccurrenceUsageElement`.",
+                "rules": "endFeatureUsage (new), nonOccurrenceUsageElement",
+                "applied": grammar != prev,
+            }
+        )
 
         # Fix 27: Make usageDeclaration optional in connection/binding/succession.
+        prev = grammar
         grammar = grammar.replace(
             "    : occurrenceUsagePrefix ( CONNECTION usageDeclaration valuePart?",
             "    : occurrenceUsagePrefix ( CONNECTION usageDeclaration? valuePart?",
@@ -1331,8 +1565,20 @@ class Antlr4Transformer:
             "    : usagePrefix ( SUCCESSION usageDeclaration )? FIRST connectorEndMember THEN connectorEndMember",
             "    : usagePrefix ( SUCCESSION usageDeclaration? )? FIRST connectorEndMember THEN connectorEndMember",
         )
+        self.applied_patches.append(
+            {
+                "id": "27",
+                "category": "Extension compatibility",
+                "summary": "Optional `usageDeclaration` in connection/binding/succession",
+                "description": "Made `usageDeclaration` optional in connection usage, binding connector, "
+                "and succession as usage declarations.",
+                "rules": "connectionUsage, bindingConnectorAsUsage, successionAsUsage",
+                "applied": grammar != prev,
+            }
+        )
 
         # Fix 28: Make usageDeclaration optional in interface/allocation/message.
+        prev = grammar
         grammar = grammar.replace(
             "interfaceUsageDeclaration\n"
             "    : usageDeclaration valuePart? ( CONNECT interfacePart )?\n",
@@ -1347,8 +1593,20 @@ class Antlr4Transformer:
             "messageDeclaration\n    : usageDeclaration valuePart?",
             "messageDeclaration\n    : usageDeclaration? valuePart?",
         )
+        self.applied_patches.append(
+            {
+                "id": "28",
+                "category": "Extension compatibility",
+                "summary": "Optional `usageDeclaration` in interface/allocation/message",
+                "description": "Made `usageDeclaration` optional in `interfaceUsageDeclaration`, "
+                "allocation declaration, and `messageDeclaration`.",
+                "rules": "interfaceUsageDeclaration, allocationUsage, messageDeclaration",
+                "applied": grammar != prev,
+            }
+        )
 
         # Fix 29: Make usageDeclaration optional in action-related rules.
+        prev = grammar
         grammar = grammar.replace(
             "actionUsageDeclaration\n    : usageDeclaration valuePart?\n",
             "actionUsageDeclaration\n    : usageDeclaration? valuePart?\n",
@@ -1359,8 +1617,20 @@ class Antlr4Transformer:
             "performActionUsageDeclaration\n"
             "    : ( ownedReferenceSubsetting featureSpecializationPart? | ACTION usageDeclaration? ) valuePart?",
         )
+        self.applied_patches.append(
+            {
+                "id": "29",
+                "category": "Extension compatibility",
+                "summary": "Optional `usageDeclaration` in action rules",
+                "description": "Made `usageDeclaration` optional in `actionUsageDeclaration` and "
+                "`performActionUsageDeclaration`.",
+                "rules": "actionUsageDeclaration, performActionUsageDeclaration",
+                "applied": grammar != prev,
+            }
+        )
 
         # Fix 30: Make usageDeclaration optional in control nodes.
+        prev = grammar
         for node in ["mergeNode", "joinNode", "forkNode"]:
             keyword = node.replace("Node", "").upper()
             grammar = grammar.replace(
@@ -1371,14 +1641,31 @@ class Antlr4Transformer:
             "decisionNode\n    : controlNodePrefix DECIDE usageDeclaration actionBody",
             "decisionNode\n    : controlNodePrefix DECIDE usageDeclaration? actionBody",
         )
+        self.applied_patches.append(
+            {
+                "id": "30",
+                "category": "Extension compatibility",
+                "summary": "Optional `usageDeclaration` in control nodes",
+                "description": "Made `usageDeclaration` optional in `mergeNode`, `joinNode`, "
+                "`forkNode`, and `decisionNode`.",
+                "rules": "mergeNode, joinNode, forkNode, decisionNode",
+                "applied": grammar != prev,
+            }
+        )
 
         # Fix 31: Make identification optional in payloadParameter trigger.
-        grammar = grammar.replace(
+        patch(
+            "31",
+            "Extension compatibility",
+            "Optional `identification` in payload parameter trigger",
+            "Made `identification` optional for trigger payload parameters.",
             "    | identification payloadFeatureSpecializationPart? triggerValuePart",
             "    | identification? payloadFeatureSpecializationPart? triggerValuePart",
+            rules="triggerUsageDeclaration",
         )
 
         # Fix 32: Make usageDeclaration optional in for-loop variable declarations.
+        prev = grammar
         grammar = grammar.replace(
             "forVariableDeclarationMember\n    : usageDeclaration\n    ;",
             "forVariableDeclarationMember\n    : usageDeclaration?\n    ;",
@@ -1387,8 +1674,20 @@ class Antlr4Transformer:
             "forVariableDeclaration\n    : usageDeclaration\n    ;",
             "forVariableDeclaration\n    : usageDeclaration?\n    ;",
         )
+        self.applied_patches.append(
+            {
+                "id": "32",
+                "category": "Extension compatibility",
+                "summary": "Optional `usageDeclaration` in for-loop variables",
+                "description": "Made `usageDeclaration` optional in `forVariableDeclarationMember` "
+                "and `forVariableDeclaration`.",
+                "rules": "forVariableDeclarationMember, forVariableDeclaration",
+                "applied": grammar != prev,
+            }
+        )
 
         # Fix 33: Make usageDeclaration optional in state/transition rules.
+        prev = grammar
         grammar = grammar.replace(
             "    : ( SUCCESSION usageDeclaration )? FIRST featureChainMember guardExpressionMember THEN transitionSuccessionMember",
             "    : ( SUCCESSION usageDeclaration? )? FIRST featureChainMember guardExpressionMember THEN transitionSuccessionMember",
@@ -1401,8 +1700,20 @@ class Antlr4Transformer:
             "    : TRANSITION ( usageDeclaration FIRST )?",
             "    : TRANSITION ( usageDeclaration? FIRST )?",
         )
+        self.applied_patches.append(
+            {
+                "id": "33",
+                "category": "Extension compatibility",
+                "summary": "Optional `usageDeclaration` in state/transition rules",
+                "description": "Made `usageDeclaration` optional in succession, exhibit state, "
+                "and transition declarations.",
+                "rules": "successionDeclaration, exhibitStateUsage, transitionDeclaration",
+                "applied": grammar != prev,
+            }
+        )
 
         # Fix 34: Make usageDeclaration optional in constraint/requirement/usecase.
+        prev = grammar
         grammar = grammar.replace(
             "constraintUsageDeclaration\n    : usageDeclaration valuePart?\n",
             "constraintUsageDeclaration\n    : usageDeclaration? valuePart?\n",
@@ -1415,11 +1726,26 @@ class Antlr4Transformer:
             "| USE CASE usageDeclaration ) valuePart?",
             "| USE CASE usageDeclaration? ) valuePart?",
         )
+        self.applied_patches.append(
+            {
+                "id": "34",
+                "category": "Extension compatibility",
+                "summary": "Optional `usageDeclaration` in constraint/requirement/use case",
+                "description": "Made `usageDeclaration` optional in `constraintUsageDeclaration`, "
+                "requirement usage, and use case usage declarations.",
+                "rules": "constraintUsageDeclaration, requirementUsage, useCaseUsage",
+                "applied": grammar != prev,
+            }
+        )
 
-        # Fix 35: flowDeclaration — make usageDeclaration optional and remove
-        # the redundant 'flowEndMember TO flowEndMember' alternative (already
-        # covered by the preceding alternative with optional parts).
-        grammar = grammar.replace(
+        # Fix 35: flowDeclaration — make usageDeclaration optional.
+        patch(
+            "35",
+            "Extension compatibility",
+            "Optional `usageDeclaration` in `flowDeclaration`; remove redundant alternative",
+            "Made `usageDeclaration` optional and removed the redundant "
+            "`flowEndMember TO flowEndMember` alternative (already covered by the preceding "
+            "alternative with optional parts).",
             "flowDeclaration\n"
             "    : featureDeclaration valuePart? ( OF payloadFeatureMember )? ( FROM flowEndMember TO flowEndMember )?\n"
             "    | ( ALL )? flowEndMember TO flowEndMember\n"
@@ -1431,12 +1757,16 @@ class Antlr4Transformer:
             "    | ( ALL )? flowEndMember TO flowEndMember\n"
             "    | usageDeclaration? valuePart? ( OF flowPayloadFeatureMember )? ( FROM flowEndMember TO flowEndMember )?\n"
             "    ;",
+            rules="flowDeclaration",
         )
 
-        # Fix 36: payloadFeature — simplify and reorder to match extension.
-        # The extension uses identification? consistently and removes redundant
-        # alternatives that are subsumed by optional identification.
-        grammar = grammar.replace(
+        # Fix 36: payloadFeature — simplify and reorder.
+        patch(
+            "36",
+            "Extension compatibility",
+            "Simplify `payloadFeature` alternatives",
+            "Uses `identification?` consistently and removes redundant alternatives that are "
+            "subsumed by optional identification.",
             "payloadFeature\n"
             "    : identification payloadFeatureSpecializationPart valuePart?\n"
             "    | identification valuePart\n"
@@ -1451,10 +1781,16 @@ class Antlr4Transformer:
             "    | ownedFeatureTyping ( ownedMultiplicity )?\n"
             "    | ownedMultiplicity ( ownedFeatureTyping )?\n"
             "    ;",
+            rules="payloadFeature",
         )
 
         # Fix 37: payloadFeatureSpecializationPart — remove redundant alternative.
-        grammar = grammar.replace(
+        patch(
+            "37",
+            "Extension compatibility",
+            "Remove redundant `payloadFeatureSpecializationPart` alternative",
+            "The third alternative `( featureSpecialization )+` is identical to the first "
+            "`featureSpecialization+`. Removed the duplicate.",
             "payloadFeatureSpecializationPart\n"
             "    : featureSpecialization+ multiplicityPart? featureSpecialization*\n"
             "    | multiplicityPart featureSpecialization+\n"
@@ -1464,57 +1800,37 @@ class Antlr4Transformer:
             "    : featureSpecialization+ multiplicityPart? featureSpecialization*\n"
             "    | multiplicityPart featureSpecialization+\n"
             "    ;",
+            rules="payloadFeatureSpecializationPart",
         )
 
         # ============================================================
         # ANTLR warning(154) fixes (Fix 38)
-        #
-        # ANTLR warning(154) fires when an optional block (…)? or (…)*
-        # contains an alternative that can already match the empty string,
-        # making the ? or * redundant.  These patches remove the redundant
-        # markers so the grammar compiles warning-free.
         # ============================================================
 
-        # Fix 38a: featurePrefix — ownedCrossFeatureMember can match ε
-        # (via ownedCrossFeature → basicUsagePrefix usageDeclaration?
-        #  where basicUsagePrefix and usageDeclaration? are all-optional).
+        # Fix 38a–g: Remove redundant ?/* on epsilon-capable sub-rules.
+        prev = grammar
         grammar = grammar.replace(
             "    : ( endFeaturePrefix ( ownedCrossFeatureMember )? | basicFeaturePrefix )",
             "    : ( endFeaturePrefix ownedCrossFeatureMember | basicFeaturePrefix )",
         )
-
-        # Fix 38b: resultExpressionMember — memberPrefix can match ε
-        # (memberPrefix = ( VISIBILITY )?).  After Fix 21 collapses to
-        # memberPrefix?, the ? is still redundant.
         grammar = grammar.replace(
             "resultExpressionMember\n    : memberPrefix? ownedExpression\n    ;",
             "resultExpressionMember\n    : memberPrefix ownedExpression\n    ;",
         )
-
-        # Fix 38c: endUsagePrefix — same ownedCrossFeatureMember ε issue.
         grammar = grammar.replace(
             "endUsagePrefix\n    : END ( ownedCrossFeatureMember )?\n    ;",
             "endUsagePrefix\n    : END ownedCrossFeatureMember\n    ;",
         )
-
-        # Fix 38d: sendNode — both optional blocks contain epsilon-capable
-        # alternatives.  actionUsageDeclaration = usageDeclaration? valuePart?
-        # can match ε, making the first (…)? redundant.  The second group
-        # has emptyParameterMember (ε) + senderReceiverPart.
         grammar = grammar.replace(
             ")? SEND ( nodeParameterMember senderReceiverPart?"
             " | emptyParameterMember senderReceiverPart )? actionBody",
             ") SEND ( nodeParameterMember senderReceiverPart?"
             " | emptyParameterMember senderReceiverPart ) actionBody",
         )
-
-        # Fix 38e: returnParameterMember — memberPrefix can match ε.
         grammar = grammar.replace(
             "returnParameterMember\n    : memberPrefix? RETURN usageElement\n    ;",
             "returnParameterMember\n    : memberPrefix RETURN usageElement\n    ;",
         )
-
-        # Fix 38f: requirementConstraintMember — memberPrefix can match ε.
         grammar = grammar.replace(
             "requirementConstraintMember\n"
             "    : memberPrefix? requirementKind requirementConstraintUsage\n"
@@ -1523,20 +1839,27 @@ class Antlr4Transformer:
             "    : memberPrefix requirementKind requirementConstraintUsage\n"
             "    ;",
         )
-
-        # Fix 38g: framedConcernMember — memberPrefix can match ε.
         grammar = grammar.replace(
             "framedConcernMember\n    : memberPrefix? FRAME framedConcernUsage\n    ;",
             "framedConcernMember\n    : memberPrefix FRAME framedConcernUsage\n    ;",
         )
+        self.applied_patches.append(
+            {
+                "id": "38",
+                "category": "ANTLR warning suppression",
+                "summary": "Remove redundant `?`/`*` on epsilon-capable sub-rules (warning 154)",
+                "description": "ANTLR warning(154) fires when an optional block `(…)?` or `(…)*` contains "
+                "an alternative that can already match the empty string. Removed redundant markers in "
+                "`featurePrefix`, `resultExpressionMember`, `endUsagePrefix`, `sendNode`, "
+                "`returnParameterMember`, `requirementConstraintMember`, and `framedConcernMember`.",
+                "rules": "featurePrefix, resultExpressionMember, endUsagePrefix, sendNode, "
+                "returnParameterMember, requirementConstraintMember, framedConcernMember",
+                "applied": grammar != prev,
+            }
+        )
 
         # ============================================================
         # Go target compatibility (Fix 39)
-        #
-        # The Go ANTLR runtime generates exported methods from rule
-        # names.  Rules named 'empty*' collide with Go identifiers in
-        # the generated code.  Append '_' to each epsilon-only rule
-        # and update all references.
         # ============================================================
         go_renames = {
             "emptyFeature": "emptyFeature_",
@@ -1544,12 +1867,9 @@ class Antlr4Transformer:
             "emptyUsage": "emptyUsage_",
             "emptyActionUsage": "emptyActionUsage_",
         }
+        prev = grammar
         for old_name, new_name in go_renames.items():
-            # Rename the rule definition (at start of line)
             grammar = grammar.replace(f"\n{old_name}\n", f"\n{new_name}\n")
-            # Rename references in other rules — use word-boundary-safe
-            # replacement: the old name is always preceded by whitespace and
-            # followed by whitespace or newline.
             import re
 
             grammar = re.sub(
@@ -1557,8 +1877,71 @@ class Antlr4Transformer:
                 new_name,
                 grammar,
             )
+        self.applied_patches.append(
+            {
+                "id": "39",
+                "category": "Target compatibility",
+                "summary": "Rename `empty*` rules for Go target compatibility",
+                "description": "The Go ANTLR runtime generates exported methods from rule names. Rules "
+                "named `empty*` collide with Go identifiers. Appended `_` to: "
+                + ", ".join(f"`{k}` → `{v}`" for k, v in go_renames.items())
+                + ".",
+                "rules": ", ".join(go_renames.values()),
+                "applied": grammar != prev,
+            }
+        )
 
         return grammar
+
+    def generate_patches_md(self, release_tag: str, grammar_version: str) -> str:
+        """Generate a PATCHES.md documenting all applied grammar patches."""
+        lines = [
+            "# Grammar Patches",
+            "",
+            "Post-generation patches applied to the ANTLR4 grammar to fix known issues in the",
+            "OMG SysML v2 KEBNF specification when translated to ANTLR4.",
+            "",
+            f"- **Grammar version**: `{grammar_version}`",
+            f"- **OMG release**: `{release_tag}`",
+            f"- **Total patches**: {len(self.applied_patches)}",
+            f"- **Applied**: {sum(1 for p in self.applied_patches if p['applied'])}",
+            f"- **Skipped**: {sum(1 for p in self.applied_patches if not p['applied'])}",
+            "",
+        ]
+
+        # Group by category
+        categories: Dict[str, List[Dict[str, str]]] = {}
+        for p in self.applied_patches:
+            categories.setdefault(p["category"], []).append(p)
+
+        for category, patches in categories.items():
+            lines.append(f"## {category}")
+            lines.append("")
+            lines.append("| # | Summary | Rules | Applied |")
+            lines.append("|---|---------|-------|---------|")
+            for p in patches:
+                status = "Yes" if p["applied"] else "No"
+                rules = p.get("rules", "")
+                # Escape pipe characters in summary/rules for table
+                summary = p["summary"].replace("|", "\\|")
+                rules_escaped = rules.replace("|", "\\|")
+                lines.append(f"| {p['id']} | {summary} | {rules_escaped} | {status} |")
+            lines.append("")
+            for p in patches:
+                lines.append(f"### Fix {p['id']}: {p['summary']}")
+                lines.append("")
+                lines.append(p["description"])
+                if p.get("rules"):
+                    lines.append("")
+                    lines.append(f"**Affected rules**: {p['rules']}")
+                lines.append("")
+
+        lines.append("---")
+        lines.append("")
+        lines.append("*Auto-generated by `scripts/generate_grammar.py`.*")
+        lines.append("")
+
+        return "\n".join(lines)
 
     def _get_expression_rule_names(self) -> Set[str]:
         """Rules handled by the expression precedence generator.
@@ -2360,6 +2743,17 @@ def main():
 
     print(f"  Lexer:  {lexer_path} ({len(lexer_grammar)} bytes)")
     print(f"  Parser: {parser_path} ({len(parser_grammar)} bytes)")
+
+    # Step 5: Write patch documentation
+    patches_md = transformer.generate_patches_md(
+        config["release_tag"], config["grammar_version"]
+    )
+    patches_path = output_dir / "PATCHES.md"
+    patches_path.write_text(patches_md)
+    applied = sum(1 for p in transformer.applied_patches if p["applied"])
+    total = len(transformer.applied_patches)
+    print(f"  Patches: {patches_path} ({applied}/{total} applied)")
+
     print()
     print("Done! Grammar files written to the grammar/ directory.")
 
