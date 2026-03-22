@@ -4,41 +4,64 @@ ANTLR4 grammar for the SysML v2 textual notation, automatically generated from t
 
 ## Quick Start
 
-### Devcontainer (recommended)
-
-Open in GitHub Codespaces or VS Code Dev Containers — everything is pre-installed and ready via the `postCreateCommand`.
-
-### Manual Setup
-
 ```bash
-# Install Python + dev dependencies (ruff, yamllint, actionlint, pip-audit)
-make install
-```
-
-### Common Commands
-
-```bash
+make install           # Install all dependencies
 make generate          # Regenerate grammar from the OMG spec
-make validate          # Compile grammar with ANTLR4 (Java + TypeScript)
-make test              # Parse example .sysml files through the grammar
-make lint              # Run all linters (ruff, yamllint, actionlint)
-make format            # Auto-format Python scripts
-make contrib           # Build and verify grammars-v4 contribution
-make version           # Show current grammar version
-make bump-revision     # Bump revision (e.g. 2026.01.0 → 2026.01.1)
-make drift-check       # Check grammar matches generator output
-make clean             # Remove generated/cached artifacts
-make ci                # Run full CI pipeline locally
-make help              # Show all available targets
+make test              # Validate grammar + parse examples + conformance
 ```
 
-### Generating for a Specific Release
+### Commands
+
+| Command | Description |
+|---------|-------------|
+| `make install` | Install Python dependencies + linting tools |
+| `make generate` | Regenerate `.g4` grammar from OMG spec |
+| `make test` | Compile grammar, parse examples, run conformance tests |
+| `make lint` | Lint Python, YAML, Actions, security audit, drift check |
+| `make format` | Auto-format Python scripts |
+| `make clean` | Remove all generated/cached artifacts |
+| `make ci` | Full CI pipeline (`lint` + `test` + `contrib`) |
+| `make update-conformance` | Fetch official OMG conformance fixtures |
+| `make help` | Show all targets |
+
+## Updating to a New Upstream Release
+
+When the OMG publishes a new SysML v2 Release (detected by the `watch-upstream.yml` cron workflow):
 
 ```bash
-make generate TAG=2026-01
+# 1. Update config to point at the new release tag
+#    Edit scripts/config.json: set release_tag and grammar_version
+
+# 2. Regenerate the grammar (fetches new KEBNF, applies patches)
+make generate TAG=2026-02
+
+# 3. Fetch the latest conformance fixtures + standard library, then test
+make update-conformance
+make test
+
+# 4. If tests fail, add new patches to
+#    scripts/generate_grammar.py (see grammar/PATCHES.md for existing ones),
+#    then repeat from step 2.
+
+# 5. Once green, run the full CI pipeline to verify everything
+make ci
+
+# 6. Commit and push
+git add -A
+git commit -m "chore: update grammar to OMG release 2026-03"
+git push
 ```
 
-The generated `.g4` files are written to `grammar/`.
+The CI workflow will automatically create a GitHub Release with the versioned grammar artifacts.
+
+### Patch Workflow
+
+The OMG KEBNF spec has known ambiguities and omissions that require post-generation patches. These are applied automatically by `generate_grammar.py` and documented in [grammar/PATCHES.md](grammar/PATCHES.md). When a new upstream release introduces new constructs that fail conformance:
+
+1. Identify failing files: `make test` or `python scripts/conformance.py --verbose`
+2. Add a fix in the `apply_patches()` method of `scripts/generate_grammar.py`
+3. Re-generate: `make generate`
+4. Re-test: `make test`
 
 ## Repository Structure
 
@@ -46,34 +69,27 @@ The generated `.g4` files are written to `grammar/`.
 ├── grammar/
 │   ├── SysMLv2Parser.g4     # Parser grammar (generated)
 │   ├── SysMLv2Lexer.g4      # Lexer grammar (generated)
-│   └── SysMLv2Lexer.tokens  # Token vocabulary
+│   ├── SysMLv2Lexer.tokens  # Token vocabulary
+│   └── PATCHES.md           # Documented post-generation patches
 ├── scripts/
-│   ├── generate_grammar.py  # KEBNF → ANTLR4 converter
+│   ├── generate_grammar.py  # KEBNF → ANTLR4 converter + patches
+│   ├── conformance.py       # Conformance test runner
 │   ├── build_contrib.py     # grammars-v4 contribution builder
-│   ├── bump_version.py      # Version revision bumper
-│   ├── find_cycles.py       # Left-recursion cycle detector
 │   ├── config.json          # Generator configuration
-│   ├── requirements.txt     # Python dependencies
-│   ├── kebnf_grammar.lark   # Lark grammar for KEBNF parsing
-│   └── postprocess-antlr.js # Post-processor for TypeScript output
-├── examples/
-│   ├── vehicle-model.sysml
-│   ├── toaster-system.sysml
-│   └── camera.sysml
-└── .github/
-    ├── RELEASE_CHECKLIST.md  # Release process steps
-    └── workflows/
-        ├── generate.yml          # CI: regenerate, validate, release
-        └── watch-upstream.yml    # Cron: detect new OMG releases
+│   └── requirements.txt     # Python dependencies
+├── examples/                # Hand-written .sysml test files
+├── test/fixtures/           # OMG conformance fixtures (fetched, not committed)
+└── .github/workflows/
+    ├── generate.yml         # CI: lint → test → release
+    └── watch-upstream.yml   # Cron: detect new OMG releases
 ```
 
 ## Grammar Generation Pipeline
 
-1. **Download**: Fetches `.kebnf` BNF files from the OMG SysML v2 Release repository
-2. **Parse**: Regex-based KEBNF parser extracts rules, terminals, and properties
-3. **Transform**: Converts to ANTLR4 format with precedence-climbing for expressions,
-   keyword extraction, and [spec-ambiguity patches](grammar/PATCHES.md)
-4. **Generate**: Writes split lexer/parser `.g4` grammars
+1. **Download** — Fetches `.kebnf` BNF files from the OMG SysML v2 Release repo
+2. **Parse** — Extracts rules, terminals, and properties from KEBNF format
+3. **Transform** — Converts to ANTLR4 with precedence-climbing expressions, keyword extraction, and [spec-ambiguity patches](grammar/PATCHES.md)
+4. **Generate** — Writes split lexer/parser `.g4` grammars
 
 ## Configuration
 
@@ -81,32 +97,21 @@ The generated `.g4` files are written to `grammar/`.
 
 | Key | Description |
 |-----|-------------|
-| `release_tag` | OMG release tag (e.g., `2026-01`) |
-| `grammar_version` | Grammar version (e.g., `2026.01.0`) |
+| `release_tag` | OMG release tag (e.g., `2026-02`) |
+| `grammar_version` | Grammar version (e.g., `2026.02.0`) |
 | `release_repo` | GitHub repo for the OMG spec |
-| `bnf_files` | Paths to KerML and SysML KEBNF files within the release |
+| `bnf_files` | Paths to KerML and SysML KEBNF files |
 | `output` | Output file names for parser and lexer grammars |
-| `options` | Grammar name, lexer name, root rule |
-
-## Using with ANTLR4
-
-The grammar compiles to all ANTLR4 targets. Validate locally with:
-
-```bash
-make validate          # Compiles with Java + TypeScript targets
-make test              # Parses all example .sysml files
-```
-
-The ANTLR4 JAR is downloaded and SHA256-verified automatically on first use.
 
 ## CI / CD
 
 The `generate.yml` workflow runs on every push and PR to `main`:
 
-1. **Regenerate** — checks grammar hasn't drifted from the generator output
-2. **Validate** — compiles with ANTLR4 (Java + TypeScript targets)
-3. **Parse examples** — runs all `.sysml` files through the grammar
-4. **Release** — publishes a GitHub Release with versioned grammar artifacts
+1. **Lint** — Python, YAML, Actions linting + security audit + grammar drift check
+2. **Test** — Compile grammar, parse examples, run conformance, build contribution
+3. **Release** — Publishes a GitHub Release with versioned grammar artifacts (main branch only)
+
+The ANTLR4 JAR is downloaded and SHA256-verified automatically on first use.
    (main branch only)
 
 ## Upstream Tracking

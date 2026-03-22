@@ -22,25 +22,7 @@ permissions:
 
 jobs:
   lint:
-    name: Lint
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
-
-      - name: Set up Python
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
-        with:
-          python-version: '3.12'
-
-      - name: Install dependencies
-        run: make install-dev
-
-      - name: Lint
-        run: make lint
-
-  generate:
-    name: Regenerate Grammar
+    name: Lint & Drift Check
     runs-on: ubuntu-latest
 
     steps:
@@ -54,8 +36,39 @@ jobs:
       - name: Install dependencies
         run: make install
 
-      - name: Check for grammar drift
-        run: make drift-check
+      - name: Lint, audit, and drift-check
+        run: make lint
+
+  test:
+    name: Validate & Conformance
+    runs-on: ubuntu-latest
+    needs: lint
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        with:
+          python-version: '3.12'
+
+      - name: Set up Java
+        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654  # v5.2.0
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install dependencies
+        run: make install
+
+      - name: Fetch conformance fixtures
+        run: make update-conformance
+
+      - name: Validate grammar, parse examples, run conformance
+        run: make test
+
+      - name: Build and verify grammars-v4 contribution
+        run: make contrib
 
       - name: Read version metadata
         id: meta
@@ -76,72 +89,6 @@ jobs:
             grammar/PATCHES.md
           if-no-files-found: error
 
-  validate:
-    name: Validate with ANTLR4
-    runs-on: ubuntu-latest
-    needs: generate
-
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
-
-      - name: Set up Java
-        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654  # v5.2.0
-        with:
-          distribution: temurin
-          java-version: '17'
-
-      - name: Validate grammar (Java + TypeScript)
-        run: make validate
-
-  parse-examples:
-    name: Parse Example Files
-    runs-on: ubuntu-latest
-    needs: validate
-
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
-
-      - name: Set up Java
-        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654  # v5.2.0
-        with:
-          distribution: temurin
-          java-version: '17'
-
-      - name: Parse example files
-        run: make parse-examples
-
-  contrib:
-    name: Build grammars-v4 Contribution
-    runs-on: ubuntu-latest
-    needs: [generate, validate, parse-examples]
-
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
-
-      - name: Set up Python
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
-        with:
-          python-version: '3.12'
-
-      - name: Set up Node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f  # v6.3.0
-        with:
-          node-version: '22'
-
-      - name: Install dependencies
-        run: make install
-
-      - name: Build and verify contribution
-        run: make contrib
-
-      - name: Read version metadata
-        id: meta
-        run: |
-          TAG=$(jq -r '.release_tag' scripts/config.json)
-          VERSION=$(jq -r '.grammar_version' scripts/config.json)
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-
       - name: Upload contribution artifact
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6.0.0
         with:
@@ -152,7 +99,7 @@ jobs:
   release:
     name: Publish GitHub Release
     runs-on: ubuntu-latest
-    needs: [generate, validate, parse-examples, contrib]
+    needs: [lint, test]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:
       contents: write

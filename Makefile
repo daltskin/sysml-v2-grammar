@@ -1,4 +1,4 @@
-.PHONY: help install install-dev generate lint lint-python lint-yaml lint-actions audit validate parse-examples clean download-antlr contrib contrib-verify
+.PHONY: help install generate test lint format clean ci update-conformance contrib
 
 PYTHON     ?= python3
 PIP        ?= pip
@@ -18,20 +18,80 @@ help: ## Show this help
 # Setup
 # ---------------------------------------------------------------------------
 
-install: ## Install runtime Python dependencies
+install: ## Install all dependencies (Python + linting tools)
 	$(PIP) install -r scripts/requirements.txt
-
-install-dev: install ## Install runtime + linting dependencies
 	$(PIP) install ruff yamllint actionlint-py pip-audit
 
+$(ANTLR_JAR):
+	@mkdir -p $(BUILD_DIR)
+	curl -fsSL -o $(ANTLR_JAR) $(ANTLR_URL)
+	echo "$(ANTLR_SHA)  $(ANTLR_JAR)" | sha256sum -c -
+
 # ---------------------------------------------------------------------------
-# Grammar generation
+# Generate
 # ---------------------------------------------------------------------------
 
 generate: ## Regenerate ANTLR4 grammar from OMG spec
 	$(PYTHON) scripts/generate_grammar.py $(if $(TAG),--tag $(TAG)) --cache
 
-drift-check: generate ## Check that committed grammar matches generator output
+# ---------------------------------------------------------------------------
+# Test
+# ---------------------------------------------------------------------------
+
+test: $(ANTLR_JAR) ## Validate grammar, parse examples, run conformance
+	@echo "── Compiling grammar (Java target) ──"
+	@mkdir -p $(BUILD_DIR)/antlr-out
+	java -jar $(ANTLR_JAR) -Dlanguage=Java -o $(BUILD_DIR)/antlr-out \
+		grammar/SysMLv2Lexer.g4 grammar/SysMLv2Parser.g4
+	@echo "✅ Grammar compiles"
+	@echo ""
+	@echo "── Parsing example files ──"
+	@mkdir -p $(BUILD_DIR)/antlr-test
+	java -jar $(ANTLR_JAR) -Dlanguage=Java -o $(BUILD_DIR)/antlr-test \
+		grammar/SysMLv2Lexer.g4 grammar/SysMLv2Parser.g4
+	cd $(BUILD_DIR)/antlr-test/grammar && javac -cp "$(CURDIR)/$(ANTLR_JAR):." *.java
+	@cd $(BUILD_DIR)/antlr-test/grammar && PASS=0; FAIL=0; \
+	for f in $(CURDIR)/examples/*.sysml; do \
+		printf "  Parsing $$(basename $$f)... "; \
+		if java -cp "$(CURDIR)/$(ANTLR_JAR):." org.antlr.v4.gui.TestRig SysMLv2Parser rootNamespace "$$f" 2>&1 | grep -qi "error"; then \
+			echo "❌ FAIL"; FAIL=$$((FAIL + 1)); \
+		else \
+			echo "✅ PASS"; PASS=$$((PASS + 1)); \
+		fi; \
+	done; \
+	echo ""; echo "  Results: $$PASS passed, $$FAIL failed"; \
+	[ $$FAIL -eq 0 ]
+	@echo ""
+	@if [ -d test/fixtures/conformance/training ]; then \
+		echo "── Running conformance tests ──"; \
+		$(PYTHON) scripts/conformance.py --verbose; \
+	else \
+		echo "── Conformance fixtures not found (run 'make update-conformance' to fetch) ──"; \
+	fi
+
+update-conformance: ## Fetch official OMG conformance fixtures + standard library
+	$(PYTHON) scripts/conformance.py --fetch
+
+# ---------------------------------------------------------------------------
+# Lint
+# ---------------------------------------------------------------------------
+
+lint: ## Lint, audit, and check grammar drift
+	@echo "── Linting Python ──"
+	ruff check scripts/
+	ruff format --check scripts/
+	@echo ""
+	@echo "── Linting YAML ──"
+	$(PYTHON) -m yamllint .github/workflows/*.yml
+	@echo ""
+	@echo "── Linting GitHub Actions ──"
+	actionlint .github/workflows/*.yml
+	@echo ""
+	@echo "── Security audit ──"
+	pip-audit -r scripts/requirements.txt
+	@echo ""
+	@echo "── Grammar drift check ──"
+	@$(PYTHON) scripts/generate_grammar.py $(if $(TAG),--tag $(TAG)) --cache
 	@if git diff --exit-code grammar/; then \
 		echo "✅ Grammar files are up to date"; \
 	else \
@@ -39,94 +99,26 @@ drift-check: generate ## Check that committed grammar matches generator output
 		exit 1; \
 	fi
 
-# ---------------------------------------------------------------------------
-# Linting
-# ---------------------------------------------------------------------------
-
-lint: lint-python lint-yaml lint-actions ## Run all linters
-
-lint-python: ## Lint Python scripts with ruff
-	ruff check scripts/
-	ruff format --check scripts/
-
-lint-yaml: ## Lint YAML files with yamllint
-	$(PYTHON) -m yamllint .github/workflows/*.yml
-
-lint-actions: ## Lint GitHub Actions workflows with actionlint
-	actionlint .github/workflows/*.yml
-
 format: ## Auto-format Python scripts
 	ruff format scripts/
 	ruff check --fix scripts/
 
 # ---------------------------------------------------------------------------
-# Security
-# ---------------------------------------------------------------------------
-
-audit: ## Scan Python dependencies for known vulnerabilities
-	pip-audit -r scripts/requirements.txt
-
-# ---------------------------------------------------------------------------
-# Validation (requires Java 17+)
-# ---------------------------------------------------------------------------
-
-$(ANTLR_JAR):
-	@mkdir -p $(BUILD_DIR)
-	curl -fsSL -o $(ANTLR_JAR) $(ANTLR_URL)
-	echo "$(ANTLR_SHA)  $(ANTLR_JAR)" | sha256sum -c -
-
-download-antlr: $(ANTLR_JAR) ## Download and verify the ANTLR4 JAR
-
-validate: $(ANTLR_JAR) ## Compile grammar with ANTLR4 (Java target)
-	@mkdir -p $(BUILD_DIR)/antlr-out
-	java -jar $(ANTLR_JAR) -Dlanguage=Java -o $(BUILD_DIR)/antlr-out \
-		grammar/SysMLv2Lexer.g4 grammar/SysMLv2Parser.g4
-	@echo "✅ Grammar compiles successfully"
-
-validate-ts: $(ANTLR_JAR) ## Compile grammar with ANTLR4 (TypeScript target)
-	@mkdir -p $(BUILD_DIR)/antlr-out-ts
-	java -jar $(ANTLR_JAR) -Dlanguage=TypeScript -visitor -no-listener \
-		-o $(BUILD_DIR)/antlr-out-ts grammar/SysMLv2Lexer.g4 grammar/SysMLv2Parser.g4
-	@echo "✅ TypeScript target compiles successfully"
-
-parse-examples: $(ANTLR_JAR) ## Parse example .sysml files through the grammar
-	@mkdir -p $(BUILD_DIR)/antlr-test
-	java -jar $(ANTLR_JAR) -Dlanguage=Java -o $(BUILD_DIR)/antlr-test \
-		grammar/SysMLv2Lexer.g4 grammar/SysMLv2Parser.g4
-	cd $(BUILD_DIR)/antlr-test/grammar && javac -cp "$(CURDIR)/$(ANTLR_JAR):." *.java
-	@cd $(BUILD_DIR)/antlr-test/grammar && PASS=0; FAIL=0; \
-	for f in $(CURDIR)/examples/*.sysml; do \
-		printf "Parsing $$(basename $$f)... "; \
-		if java -cp "$(CURDIR)/$(ANTLR_JAR):." org.antlr.v4.gui.TestRig SysMLv2Parser rootNamespace "$$f" 2>&1 | grep -qi "error"; then \
-			echo "❌ FAIL"; FAIL=$$((FAIL + 1)); \
-		else \
-			echo "✅ PASS"; PASS=$$((PASS + 1)); \
-		fi; \
-	done; \
-	echo ""; echo "Results: $$PASS passed, $$FAIL failed"; \
-	[ $$FAIL -eq 0 ]
-
-# ---------------------------------------------------------------------------
 # Utilities
 # ---------------------------------------------------------------------------
-
-cycles: ## Detect left-recursion cycles in the grammar
-	$(PYTHON) scripts/find_cycles.py grammar/SysMLv2Parser.g4
 
 clean: ## Remove generated/cached artifacts
 	rm -rf $(BUILD_DIR)
 	rm -rf .grammar-cache __pycache__ scripts/__pycache__
 	rm -rf grammar/.antlr
 	rm -rf contrib
+	rm -rf test/fixtures sysml.library
 
-# ---------------------------------------------------------------------------
-# Contribution (grammars-v4)
-# ---------------------------------------------------------------------------
-
-contrib: ## Build grammars-v4 contribution directory
-	$(PYTHON) scripts/build_contrib.py
-
-contrib-verify: ## Build and verify grammars-v4 contribution
+contrib: ## Build and verify grammars-v4 contribution
 	$(PYTHON) scripts/build_contrib.py --verify
 
-ci: lint audit drift-check validate parse-examples contrib-verify ## Run full CI pipeline locally
+# ---------------------------------------------------------------------------
+# CI
+# ---------------------------------------------------------------------------
+
+ci: lint test contrib ## Full CI pipeline
