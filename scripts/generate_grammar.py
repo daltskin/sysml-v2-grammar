@@ -591,10 +591,16 @@ class Antlr4Transformer:
 
         # Comments and whitespace
         lines.append("// Comments")
-        lines.append("// REGULAR_COMMENT also matches //* ... */ (OMG block-comment-out convention).")
+        lines.append(
+            "// REGULAR_COMMENT also matches //* ... */ (OMG block-comment-out convention)."
+        )
         lines.append("REGULAR_COMMENT : '/*' .*? '*/' | '//*' .*? '*/' ;")
-        lines.append("// SINGLE_LINE_NOTE: '//' followed by non-'*' content (to avoid consuming")
-        lines.append("// //* ... */ block comments which are handled by REGULAR_COMMENT).")
+        lines.append(
+            "// SINGLE_LINE_NOTE: '//' followed by non-'*' content (to avoid consuming"
+        )
+        lines.append(
+            "// //* ... */ block comments which are handled by REGULAR_COMMENT)."
+        )
         lines.append("// A bare '//' at end of line is handled by the second rule.")
         lines.append("SINGLE_LINE_NOTE : '//' ~[*\\r\\n] ~[\\r\\n]* -> skip ;")
         lines.append("BARE_LINE_COMMENT : '//' -> skip ;")
@@ -2058,10 +2064,7 @@ class Antlr4Transformer:
         # Expand the name rule to accept these keywords as identifiers.
         prev = grammar
         grammar = grammar.replace(
-            "name\n"
-            "    : IDENTIFIER\n"
-            "    | STRING\n"
-            "    ;",
+            "name\n    : IDENTIFIER\n    | STRING\n    ;",
             "name\n"
             "    : IDENTIFIER\n"
             "    | STRING\n"
@@ -2224,9 +2227,7 @@ class Antlr4Transformer:
             "inside an enum def body. The `enumerationUsageMember` rule only allowed "
             "`memberPrefix enumeratedValue`, without prefix metadata support. "
             "Added `( prefixMetadataMember )*` to allow metadata annotations like `#Security`.",
-            "enumerationUsageMember\n"
-            "    : memberPrefix enumeratedValue\n"
-            "    ;",
+            "enumerationUsageMember\n    : memberPrefix enumeratedValue\n    ;",
             "enumerationUsageMember\n"
             "    : ( prefixMetadataMember )* memberPrefix enumeratedValue\n"
             "    ;",
@@ -2265,9 +2266,7 @@ class Antlr4Transformer:
         # in parenthesized position.
         prev = grammar
         grammar = grammar.replace(
-            "baseExpression\n"
-            "    : nullExpression\n"
-            "    | literalExpression\n",
+            "baseExpression\n    : nullExpression\n    | literalExpression\n",
             "baseExpression\n"
             "    : nullExpression\n"
             "    | REGULAR_COMMENT   // ignore block comments used as expression placeholders\n"

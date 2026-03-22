@@ -35,7 +35,9 @@ FIXTURES_DIR = ROOT / "test" / "fixtures" / "conformance"
 
 LIBRARY_REPO = "Systems-Modeling/SysML-v2-Release"
 LIBRARY_BRANCH = "master"
-LIBRARY_ARCHIVE = f"https://github.com/{LIBRARY_REPO}/archive/refs/heads/{LIBRARY_BRANCH}.tar.gz"
+LIBRARY_ARCHIVE = (
+    f"https://github.com/{LIBRARY_REPO}/archive/refs/heads/{LIBRARY_BRANCH}.tar.gz"
+)
 
 # Standard library ships with the repo (committed)
 LIBRARY_DIR = ROOT / "sysml.library"
@@ -96,7 +98,9 @@ def find_files(directory: Path, extensions: list[str]) -> list[Path]:
 def ensure_grammar_compiled() -> None:
     """Compile the grammar with ANTLR4 Java target if not already done."""
     if not ANTLR_JAR.exists():
-        print("❌ ANTLR4 JAR not found. Run 'make download-antlr' first.", file=sys.stderr)
+        print(
+            "❌ ANTLR4 JAR not found. Run 'make download-antlr' first.", file=sys.stderr
+        )
         sys.exit(1)
 
     # Check if already compiled
@@ -109,9 +113,12 @@ def ensure_grammar_compiled() -> None:
 
     subprocess.run(
         [
-            "java", "-jar", str(ANTLR_JAR),
+            "java",
+            "-jar",
+            str(ANTLR_JAR),
             "-Dlanguage=Java",
-            "-o", str(compile_dir),
+            "-o",
+            str(compile_dir),
             str(ROOT / "grammar" / "SysMLv2Lexer.g4"),
             str(ROOT / "grammar" / "SysMLv2Parser.g4"),
         ],
@@ -131,9 +138,12 @@ def parse_file(filepath: Path) -> ParseFailure | None:
     """Parse a single file through ANTLR4 TestRig. Returns failure or None."""
     result = subprocess.run(
         [
-            "java", "-cp", f"{ANTLR_JAR}:.",
+            "java",
+            "-cp",
+            f"{ANTLR_JAR}:.",
             "org.antlr.v4.gui.TestRig",
-            "SysMLv2Parser", "rootNamespace",
+            "SysMLv2Parser",
+            "rootNamespace",
             str(filepath),
         ],
         cwd=str(GRAMMAR_CLASS_DIR),
@@ -249,9 +259,15 @@ def fetch_fixtures() -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="SysML v2 Grammar Conformance Tests")
-    parser.add_argument("--fetch", action="store_true", help="Fetch/update fixtures from OMG repo")
-    parser.add_argument("--suite", choices=list(SUITES.keys()), help="Run only this suite")
-    parser.add_argument("--verbose", "-v", action="store_true", help="Show individual file failures")
+    parser.add_argument(
+        "--fetch", action="store_true", help="Fetch/update fixtures from OMG repo"
+    )
+    parser.add_argument(
+        "--suite", choices=list(SUITES.keys()), help="Run only this suite"
+    )
+    parser.add_argument(
+        "--verbose", "-v", action="store_true", help="Show individual file failures"
+    )
     args = parser.parse_args()
 
     if args.fetch:
@@ -280,7 +296,9 @@ def main() -> None:
             any_failure = True
             failed = len(result.failures)
             passed = result.total - failed
-            print(f"  ❌ {result.label}: {passed}/{result.total} passed ({failed} failures)")
+            print(
+                f"  ❌ {result.label}: {passed}/{result.total} passed ({failed} failures)"
+            )
             if args.verbose:
                 for f in result.failures:
                     print(f"       ✗ {f.file} — {f.stderr}")
@@ -289,7 +307,9 @@ def main() -> None:
     print()
     total_files = sum(r.total for r in results)
     total_failures = sum(len(r.failures) for r in results)
-    print(f"📊 Total: {total_files - total_failures}/{total_files} files passed across {len(results)} suites")
+    print(
+        f"📊 Total: {total_files - total_failures}/{total_files} files passed across {len(results)} suites"
+    )
 
     if any_failure:
         print()
