@@ -5,8 +5,8 @@ OMG SysML v2 KEBNF specification when translated to ANTLR4.
 
 - **Grammar version**: `2026.02.0`
 - **OMG release**: `2026-02`
-- **Total patches**: 43
-- **Applied**: 42
+- **Total patches**: 55
+- **Applied**: 54
 - **Skipped**: 1
 
 ## Spec BNF fix
@@ -344,6 +344,95 @@ ANTLR warning(154) fires when an optional block `(…)?` or `(…)*` contains an
 The Go ANTLR runtime generates exported methods from rule names. Rules named `empty*` collide with Go identifiers. Appended `_` to: `emptyFeature` → `emptyFeature_`, `emptyMultiplicity` → `emptyMultiplicity_`, `emptyUsage` → `emptyUsage_`, `emptyActionUsage` → `emptyActionUsage_`.
 
 **Affected rules**: emptyFeature_, emptyMultiplicity_, emptyUsage_, emptyActionUsage_
+
+## Conformance fix
+
+| # | Summary | Rules | Applied |
+|---|---------|-------|---------|
+| 40 | Add `endOccurrenceUsageElement` for `end [mult] port/item/part` | endOccurrenceUsageElement (new), definitionBodyItem, interfaceOccurrenceUsageElement | Yes |
+| 41 | Allow bare `NOT SATISFY` without `ASSERT` prefix | satisfyRequirementUsage | Yes |
+| 42 | Handle `//*..*/` block comments in `REGULAR_COMMENT` lexer rule | REGULAR_COMMENT (lexer rule, updated) | Yes |
+| 43 | Allow optional name and `nonunique` in `endOccurrenceUsageElement` | endOccurrenceUsageElement | Yes |
+| 44 | Allow keywords as names in name positions | name, unreservedKeyword (new) | Yes |
+| 45 | Reorder `actionNodeMember` before `behaviorUsageMember` in `actionBehaviorMember` | actionBehaviorMember | Yes |
+| 46 | Track cascading parse errors in `SysML.sysml` metadata defs | (cascading — no rule change needed) | Yes |
+| 47 | Allow `send` without inline payload/receiver in `sendNode` | sendNode | Yes |
+| 48 | Allow prefix metadata annotations on enumeration value members | enumerationUsageMember | Yes |
+| 49 | Allow `REF` in body parameter declarations for `{in ref ...}` blocks | feature | Yes |
+| 50 | Allow `REGULAR_COMMENT` as a no-op expression in `baseExpression` | baseExpression | Yes |
+| 51 | Allow `definitionBodyItem` in `functionBodyPart` for body expressions | functionBodyPart | Yes |
+
+### Fix 40: Add `endOccurrenceUsageElement` for `end [mult] port/item/part`
+
+Official SysML v2 training and validation models use `end [1] port p : P`, `end [0..1] item c : C`, and `end port sp : OutPort` inside connection, interface, and flow definition bodies. Added `endOccurrenceUsageElement : END (ownedCrossMultiplicityMember)? occurrenceUsageElement` and referenced it from `definitionBodyItem` and `interfaceOccurrenceUsageElement`.
+
+**Affected rules**: endOccurrenceUsageElement (new), definitionBodyItem, interfaceOccurrenceUsageElement
+
+### Fix 41: Allow bare `NOT SATISFY` without `ASSERT` prefix
+
+The official OMG example `RequirementTest.sysml` uses `not satisfy r1 by p;` without an `assert` prefix. Fix 3 made `NOT` optional inside `ASSERT (NOT)?`, and Fix 7 made `ASSERT` optional, but `( ASSERT ( NOT )? )?` does not allow bare `NOT SATISFY`. Changed to `( ASSERT ( NOT )? | NOT )?`.
+
+**Affected rules**: satisfyRequirementUsage
+
+### Fix 42: Handle `//*..*/` block comments in `REGULAR_COMMENT` lexer rule
+
+Official OMG SysML v2 training/validation files use `//* ... */` to comment out code blocks. Changed `REGULAR_COMMENT` to `'//'? '/*' .*? '*/'` so it also matches the `//` prefix form. ANTLR longest-match ensures `REGULAR_COMMENT` wins over `SINGLE_LINE_NOTE` for single-line `//* ... */`.
+
+**Affected rules**: REGULAR_COMMENT (lexer rule, updated)
+
+### Fix 43: Allow optional name and `nonunique` in `endOccurrenceUsageElement`
+
+Official OMG standard library and examples use `end theCauses [*] occurrence theCause :> causes`, `end inCart[0..1] item cart : ShoppingCart`, and `end [0..*] nonunique item selectedProduct`. Added optional `name` after END and optional `NONUNIQUE` before the occurrence keyword.
+
+**Affected rules**: endOccurrenceUsageElement
+
+### Fix 44: Allow keywords as names in name positions
+
+The OMG standard library uses keywords as identifiers: `attribute type : String` (ImageMetadata), `alias multiplicity for degeneracy` (ISQChemistryMolecular), `attribute <var> ...` (SI), and `subsets step`, `redefines behavior`, `subsets feature`, `redefines function`, `subsets member`, `redefines predicate` (SysML.sysml). Added `unreservedKeyword` alternative to the `name` rule.
+
+**Affected rules**: name, unreservedKeyword (new)
+
+### Fix 45: Reorder `actionNodeMember` before `behaviorUsageMember` in `actionBehaviorMember`
+
+The official ActionTest.sysml uses `action snd send { ... }`. Previously `behaviorUsageMember` (via `actionUsage`) matched `action snd` first and then failed on `send`. Moving `actionNodeMember` before `behaviorUsageMember` in `actionBehaviorMember` lets the parser try the send-node interpretation first.
+
+**Affected rules**: actionBehaviorMember
+
+### Fix 46: Track cascading parse errors in `SysML.sysml` metadata defs
+
+SysML.sysml contains chained `subsets` and `redefines` patterns inside sequential `metadata def` blocks (e.g. `subsets step, usage subsets Metadata::metadataItems`). These fail due to ANTLR error recovery from earlier constructs, not a missing grammar rule. Individual patterns parse correctly. Resolves when all other conformance fixes are applied.
+
+**Affected rules**: (cascading — no rule change needed)
+
+### Fix 47: Allow `send` without inline payload/receiver in `sendNode`
+
+ActionTest.sysml uses `action snd send { in :>> payload = s; }` where the payload is specified inside the body. The `sendNode` rule required either `nodeParameterMember` or `emptyParameterMember senderReceiverPart` after SEND, but the second branch mandated `senderReceiverPart` (VIA/TO). Made it optional.
+
+**Affected rules**: sendNode
+
+### Fix 48: Allow prefix metadata annotations on enumeration value members
+
+MetadataTest.sysml uses `#Security enum secret : ClassificationLevel = 2;` inside an enum def body. The `enumerationUsageMember` rule only allowed `memberPrefix enumeratedValue`, without prefix metadata support. Added `( prefixMetadataMember )*` to allow metadata annotations like `#Security`.
+
+**Affected rules**: enumerationUsageMember
+
+### Fix 49: Allow `REF` in body parameter declarations for `{in ref ...}` blocks
+
+TradeStudies, 7b-Variant Configurations, and 15_05-Unification use `->forAll {in ref w; ...}` and `->selectOne {in ref a { ... } ...}`. The `feature` rule uses `basicFeaturePrefix featureDeclaration` but `basicFeaturePrefix` has no `REF` keyword. Added optional `( REF )?` between `basicFeaturePrefix` and `featureDeclaration`.
+
+**Affected rules**: feature
+
+### Fix 50: Allow `REGULAR_COMMENT` as a no-op expression in `baseExpression`
+
+Analysis Case Usage Example.sysml uses `= ( //* ... */ )` where the entire expression is a commented-out placeholder. After Fix 42 unified `//*` into `REGULAR_COMMENT`, the token appears inside parenthesized expressions. Added `REGULAR_COMMENT` as an alternative in `baseExpression`.
+
+**Affected rules**: baseExpression
+
+### Fix 51: Allow `definitionBodyItem` in `functionBodyPart` for body expressions
+
+VehicleGeometryAndCoordinateFrames.sysml uses `private attribute` inside a `->forAll { ... }` body expression. The `functionBodyPart` rule only allowed `typeBodyElement` which routes through `featureMember` — too limited for usage elements like `attributeUsage` with visibility modifiers. Added `definitionBodyItem` as an alternative.
+
+**Affected rules**: functionBodyPart
 
 ---
 

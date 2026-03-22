@@ -18,6 +18,12 @@ grammar/.antlr/
 # Linter cache
 .ruff_cache/
 
+# Conformance test fixtures (fetched, not committed)
+test/fixtures/
+
+# Standard library (fetched)
+sysml.library/
+
 # IDE
 .vscode/
 .idea/
