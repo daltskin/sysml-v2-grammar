@@ -272,7 +272,7 @@ def main() -> None:
 
     if args.fetch:
         fetch_fixtures()
-        print()
+        return
 
     print("SysML v2 Grammar Conformance Tests")
     print("=" * 50)
