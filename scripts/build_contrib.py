@@ -220,7 +220,7 @@ def generate_readme(release_tag: str, release_repo: str) -> str:
         | File | Description |
         |------|-------------|
         | `SysMLv2Lexer.g4` | Lexer grammar — keywords, operators, literals, whitespace |
-        | `SysMLv2.g4` | Parser grammar — full SysML v2 textual syntax |
+        | `SysMLv2Parser.g4` | Parser grammar — full SysML v2 textual syntax |
 
         ## Entry Point
 
@@ -316,8 +316,19 @@ def verify_contrib(output_dir: Path) -> bool:
     print("🔍 Verifying contribution directory …")
     ok = True
 
+    config = load_config()
+    grammar_name = config["options"]["grammar_name"]
+    lexer_name = config["options"]["lexer_name"]
+    start_rule = config["options"]["root_rule"]
+
     # Check required files exist
-    required = ["SysMLv2.g4", "SysMLv2Lexer.g4", "pom.xml", "desc.xml", "README.md"]
+    required = [
+        f"{grammar_name}.g4",
+        f"{lexer_name}.g4",
+        "pom.xml",
+        "desc.xml",
+        "README.md",
+    ]
     for name in required:
         if not (output_dir / name).exists():
             print(f"  ❌ Missing required file: {name}")
@@ -334,7 +345,7 @@ def verify_contrib(output_dir: Path) -> bool:
         print(f"  ✅ {len(examples)} example file(s)")
 
     # Check EOF in start rule
-    parser_text = (output_dir / "SysMLv2.g4").read_text()
+    parser_text = (output_dir / f"{grammar_name}.g4").read_text()
     # Match rootNamespace rule in both multi-line and single-line (post-format) forms
     root_match = re.search(r"rootNamespace\s*:?.*?;", parser_text, re.DOTALL)
     if root_match and "EOF" in root_match.group(0):
@@ -352,8 +363,6 @@ def verify_contrib(output_dir: Path) -> bool:
 
     # Check pom.xml has correct entryPoint
     pom_text = (output_dir / "pom.xml").read_text()
-    config = load_config()
-    start_rule = config["options"]["root_rule"]
     if f"<entryPoint>{start_rule}</entryPoint>" in pom_text:
         print(f"  ✅ pom.xml entryPoint = {start_rule}")
     else:

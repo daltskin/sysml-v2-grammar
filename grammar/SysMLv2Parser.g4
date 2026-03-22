@@ -60,6 +60,7 @@ sequenceExpressionList
 
 baseExpression
     : nullExpression
+    | REGULAR_COMMENT   // ignore block comments used as expression placeholders
     | literalExpression
     | qualifiedName ( argumentList | DOT METADATA )?   // merged featureRef/metadataAccess/invocation
     | constructorExpression
@@ -136,6 +137,26 @@ argumentExpressionMember
 name
     : IDENTIFIER
     | STRING
+    | unreservedKeyword
+    ;
+
+// Keywords that appear as names in the official OMG standard library.
+// These are contextually unreserved — valid as identifiers in name positions.
+unreservedKeyword
+    : TYPE
+    | MULTIPLICITY
+    | VAR
+    | LANGUAGE
+    | LOCALE
+    | CROSSES
+    | STEP
+    | FEATURE
+    | BEHAVIOR
+    | FUNCTION
+    | MEMBER
+    | PREDICATE
+    | INTERACTION
+    | METACLASS
     ;
 
 // ===== Parser rules =====
@@ -455,7 +476,7 @@ ownedSubclassification
     ;
 
 feature
-    : ( featurePrefix ( FEATURE | prefixMetadataMember ) featureDeclaration? | ( endFeaturePrefix | basicFeaturePrefix ) featureDeclaration ) valuePart? typeBody
+    : ( featurePrefix ( FEATURE | prefixMetadataMember ) featureDeclaration? | ( endFeaturePrefix | basicFeaturePrefix ) ( REF )? featureDeclaration ) valuePart? typeBody
     ;
 
 endFeaturePrefix
@@ -715,7 +736,7 @@ functionBody
     ;
 
 functionBodyPart
-    : ( typeBodyElement | returnFeatureMember )* ( resultExpressionMember )?
+    : ( definitionBodyItem | typeBodyElement | returnFeatureMember )* ( resultExpressionMember )?
     ;
 
 returnFeatureMember
@@ -1118,6 +1139,7 @@ definitionBody
 definitionBodyItem
     : importRule
     | memberPrefix definitionBodyItemContent
+    | ( sourceSuccessionMember )? memberPrefix endOccurrenceUsageElement
     | ( sourceSuccessionMember )? memberPrefix occurrenceUsageElement
     ;
 
@@ -1227,6 +1249,13 @@ nonOccurrenceUsageElement
     | defaultReferenceUsage
     ;
 
+// end [multiplicity] <occurrence-keyword> — e.g. end [1] port p : P;
+// The END keyword marks a feature as a connection/interface/flow endpoint.
+// The optional multiplicity constrains the end feature cardinality.
+endOccurrenceUsageElement
+    : END ( name )? ( ownedCrossMultiplicityMember )? ( NONUNIQUE )? occurrenceUsageElement
+    ;
+
 occurrenceUsageElement
     : structureUsageElement
     | behaviorUsageElement
@@ -1315,7 +1344,7 @@ enumerationBody
     ;
 
 enumerationUsageMember
-    : memberPrefix enumeratedValue
+    : ( prefixMetadataMember )* memberPrefix enumeratedValue
     ;
 
 enumeratedValue
@@ -1484,6 +1513,7 @@ interfaceOccurrenceUsageMember
 
 interfaceOccurrenceUsageElement
     : defaultInterfaceEnd
+    | endOccurrenceUsageElement
     | structureUsageElement
     | behaviorUsageElement
     ;
@@ -1607,8 +1637,8 @@ nonBehaviorBodyItem
     ;
 
 actionBehaviorMember
-    : behaviorUsageMember
-    | actionNodeMember
+    : actionNodeMember
+    | behaviorUsageMember
     ;
 
 initialNodeMember
@@ -1724,7 +1754,7 @@ triggerExpression
     ;
 
 sendNode
-    : occurrenceUsagePrefix ( actionNodeUsageDeclaration | actionUsageDeclaration ) SEND ( nodeParameterMember senderReceiverPart? | emptyParameterMember senderReceiverPart ) actionBody
+    : occurrenceUsagePrefix ( actionNodeUsageDeclaration | actionUsageDeclaration ) SEND ( nodeParameterMember senderReceiverPart? | emptyParameterMember senderReceiverPart? ) actionBody
     ;
 
 sendNodeDeclaration
@@ -2084,7 +2114,7 @@ requirementUsage
     ;
 
 satisfyRequirementUsage
-    : occurrenceUsagePrefix ( ASSERT ( NOT )? )? SATISFY ( ownedReferenceSubsetting featureSpecializationPart? | REQUIREMENT usageDeclaration? ) valuePart? ( BY satisfactionSubjectMember )? requirementBody
+    : occurrenceUsagePrefix ( ASSERT ( NOT )? | NOT )? SATISFY ( ownedReferenceSubsetting featureSpecializationPart? | REQUIREMENT usageDeclaration? ) valuePart? ( BY satisfactionSubjectMember )? requirementBody
     ;
 
 satisfactionSubjectMember
