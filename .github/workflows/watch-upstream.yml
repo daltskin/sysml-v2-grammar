@@ -89,16 +89,17 @@ jobs:
         env:
           LATEST: ${{ steps.upstream.outputs.latest }}
         run: |
-          make generate TAG="$LATEST"
-
           # Derive new grammar_version from OMG tag (YYYY-MM → YYYY.MM.0)
           NEW_VERSION=$(echo "$LATEST" | sed 's/-/./' | sed 's/$/.0/')
 
-          # Update config.json with new tag and reset version
+          # Update config.json with new tag and reset version BEFORE
+          # generating, so that PATCHES.md picks up the correct version.
           jq --arg tag "$LATEST" --arg ver "$NEW_VERSION" \
             '.release_tag = $tag | .grammar_version = $ver' \
             scripts/config.json > scripts/config.json.tmp
           mv scripts/config.json.tmp scripts/config.json
+
+          make generate TAG="$LATEST"
 
           # Update the "Current Spec Version" section in README.md
           REPO=$(jq -r '.release_repo' scripts/config.json)
