@@ -24,14 +24,16 @@ def main():
                 defs[m.group(1)] = i
 
     # Build adjacency: rule -> rules it references
+    # Split the grammar into rule blocks using the definition line numbers
+    sorted_defs = sorted(defs.items(), key=lambda x: x[1])
     adj = {}
-    for m in re.finditer(
-        r"^(\w+)\s*\n?\s*:(.*?)(?=\n\w+\s*\n?\s*:|\n\w+\s*$|\Z)",
-        text,
-        re.MULTILINE | re.DOTALL,
-    ):
-        name = m.group(1)
-        body = m.group(2)
+    for idx, (name, start_line) in enumerate(sorted_defs):
+        # Rule body extends from the definition line to the next rule's definition
+        if idx + 1 < len(sorted_defs):
+            end_line = sorted_defs[idx + 1][1] - 1
+        else:
+            end_line = len(lines)
+        body = "\n".join(lines[start_line:end_line])  # skip the rule name line itself
         adj[name] = set()
         for token in re.findall(r"\b([a-z]\w+)\b", body):
             if token in defs and token != name:
