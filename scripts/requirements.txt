@@ -1,2 +1,2 @@
 lark==1.2.2
-requests==2.32.5
+requests==2.33.1

@@ -20,7 +20,8 @@ help: ## Show this help
 
 install: ## Install all dependencies (Python + linting tools)
 	$(PIP) install -r scripts/requirements.txt
-	$(PIP) install ruff yamllint actionlint-py pip-audit
+	$(PIP) install -r scripts/requirements-dev.txt || \
+		(echo "Retrying dev dependencies..." && sleep 5 && $(PIP) install -r scripts/requirements-dev.txt)
 
 $(ANTLR_JAR):
 	@mkdir -p $(BUILD_DIR)

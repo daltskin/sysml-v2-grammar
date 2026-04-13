@@ -1,0 +1,4 @@
+ruff==0.15.10
+yamllint==1.38.0
+actionlint-py==1.7.12.24
+pip-audit==2.10.0
