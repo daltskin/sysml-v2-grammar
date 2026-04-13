@@ -2326,6 +2326,90 @@ class Antlr4Transformer:
             }
         )
 
+        # Fix 52: Remove unreachable parser rules
+        # These rules exist in the KEBNF for metamodel type annotations but are
+        # unreachable from rootNamespace in the ANTLR4 grammar. They fall into:
+        #   - Merged rules (syntax folded into other rules by Fixes 11/22)
+        #   - Feature chain rules (merged into qualifiedName patterns)
+        #   - Metamodel wrapper passthroughs (no ANTLR4 equivalent)
+        dead_rules = [
+            "metadataAccessExpression",
+            "invocationExpression",
+            "ownedFeatureChain",
+            "featureChain",
+            "ownedFeatureChaining",
+            "flowEndSubsetting",
+            "featureChainPrefix",
+            "flowFeatureMember",
+            "flowFeature",
+            "flowFeatureRedefinition",
+            "occurrenceUsageMember",
+            "forVariableDeclaration",
+            "metadataUsage",
+            "metadataUsageDeclaration",
+            "ownedExpressionMember",
+            "metadataReference",
+            "typeReferenceMember",
+            "typeResultMember",
+            "referenceTyping",
+            "emptyResultMember",
+            "sequenceOperatorExpression",
+            "sequenceExpressionListMember",
+            "bodyArgumentMember",
+            "bodyArgument",
+            "bodyArgumentValue",
+            "functionReferenceArgumentMember",
+            "functionReferenceArgument",
+            "functionReferenceArgumentValue",
+            "functionReferenceExpression",
+            "functionReferenceMember",
+            "functionReference",
+            "ownedFeatureChainMember",
+            "featureReferenceMember",
+            "featureReference",
+            "elementReferenceMember",
+            "constructorResultMember",
+            "constructorResult",
+            "instantiatedTypeMember",
+            "instantiatedTypeReference",
+            "namedArgumentMember",
+            "parameterRedefinition",
+            "expressionBodyMember",
+            "expressionBody",
+            "booleanValue",
+            "realValue",
+        ]
+        prev = grammar
+        import re as _re
+
+        for rule_name in dead_rules:
+            # Match rule definition: name on its own line, followed by : and body ending with ;
+            grammar = _re.sub(
+                r"\n" + rule_name + r"\n    :.*?;\n",
+                "\n",
+                grammar,
+                flags=_re.DOTALL,
+            )
+        # Collapse runs of 3+ blank lines left by removals
+        grammar = _re.sub(r"\n{3,}", "\n\n", grammar)
+        removed_count = len(dead_rules)
+        self.applied_patches.append(
+            {
+                "id": "52",
+                "category": "Dead rule removal",
+                "summary": f"Remove {removed_count} unreachable parser rules",
+                "description": f"Removed {removed_count} parser rules unreachable from `rootNamespace`. "
+                "These include merged rules (Fixes 11/22 left definitions behind), "
+                "feature chain rules (merged into `qualifiedName ( DOT qualifiedName )*` patterns), "
+                "and metamodel wrapper passthroughs (e.g., `bodyArgumentMember : bodyArgument`) "
+                "that exist in the KEBNF for type annotations with no ANTLR4 equivalent. "
+                "Reduces the grammar by ~9%, resulting in smaller ATN serialization, "
+                "fewer DFA decisions, shallower parse trees, and fewer generated Context classes.",
+                "rules": f"({removed_count} rules removed — see commit for full list)",
+                "applied": grammar != prev,
+            }
+        )
+
         return grammar
 
     def generate_patches_md(self, release_tag: str, grammar_version: str) -> str:

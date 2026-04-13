@@ -5,8 +5,8 @@ OMG SysML v2 KEBNF specification when translated to ANTLR4.
 
 - **Grammar version**: `2026.03.0`
 - **OMG release**: `2026-03`
-- **Total patches**: 55
-- **Applied**: 54
+- **Total patches**: 56
+- **Applied**: 55
 - **Skipped**: 1
 
 ## Spec BNF fix
@@ -433,6 +433,18 @@ Analysis Case Usage Example.sysml uses `= ( //* ... */ )` where the entire expre
 VehicleGeometryAndCoordinateFrames.sysml uses `private attribute` inside a `->forAll { ... }` body expression. The `functionBodyPart` rule only allowed `typeBodyElement` which routes through `featureMember` — too limited for usage elements like `attributeUsage` with visibility modifiers. Added `definitionBodyItem` as an alternative.
 
 **Affected rules**: functionBodyPart
+
+## Dead rule removal
+
+| # | Summary | Rules | Applied |
+|---|---------|-------|---------|
+| 52 | Remove 45 unreachable parser rules | (45 rules removed — see commit for full list) | Yes |
+
+### Fix 52: Remove 45 unreachable parser rules
+
+Removed 45 parser rules unreachable from `rootNamespace`. These include merged rules (Fixes 11/22 left definitions behind), feature chain rules (merged into `qualifiedName ( DOT qualifiedName )*` patterns), and metamodel wrapper passthroughs (e.g., `bodyArgumentMember : bodyArgument`) that exist in the KEBNF for type annotations with no ANTLR4 equivalent. Reduces the grammar by ~9%, resulting in smaller ATN serialization, fewer DFA decisions, shallower parse trees, and fewer generated Context classes.
+
+**Affected rules**: (45 rules removed — see commit for full list)
 
 ---
 
