@@ -23,7 +23,7 @@ make test              # Validate grammar + parse examples + conformance
 | `make lint` | Lint Python, YAML, Actions, security audit, drift check |
 | `make format` | Auto-format Python scripts |
 | `make clean` | Remove all generated/cached artifacts |
-| `make ci` | Full CI pipeline (`lint` + `test` + `contrib`) |
+| `make ci` | Full CI pipeline (`lint` + `test` + `contrib` + `sdk`) |
 | `make update-conformance` | Fetch official OMG conformance fixtures |
 | `make help` | Show all targets |
 
@@ -107,6 +107,7 @@ The OMG KEBNF spec has known ambiguities and omissions that require post-generat
 │   └── PATCHES.md           # Documented post-generation patches
 ├── scripts/
 │   ├── generate_grammar.py  # KEBNF → ANTLR4 converter + patches
+│   ├── generate_sdks.py     # ANTLR4 target SDK generator + release archive packer
 │   ├── conformance.py       # Conformance test runner
 │   ├── build_contrib.py     # grammars-v4 contribution builder
 │   ├── config.json          # Generator configuration
@@ -146,7 +147,6 @@ The `generate.yml` workflow runs on every push and PR to `main`:
 3. **Release** — Publishes a GitHub Release with the contribution zip and the all-language SDK zip (main branch only)
 
 The ANTLR4 JAR is downloaded and SHA256-verified automatically on first use.
-   (main branch only)
 
 ## Upstream Tracking
 
