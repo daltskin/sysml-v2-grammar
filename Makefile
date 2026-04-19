@@ -128,4 +128,4 @@ contrib: ## Build and verify grammars-v4 contribution
 # CI
 # ---------------------------------------------------------------------------
 
-ci: lint test contrib sdk ## Full CI pipeline
+ci: lint test contrib sdk-archive ## Full CI pipeline
