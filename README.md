@@ -7,6 +7,7 @@ ANTLR4 grammar for the SysML v2 textual notation, automatically generated from t
 ```bash
 make install           # Install all dependencies
 make generate          # Regenerate grammar from the OMG spec
+make sdk               # Generate SDKs for every ANTLR4 target
 make test              # Validate grammar + parse examples + conformance
 ```
 
@@ -16,6 +17,8 @@ make test              # Validate grammar + parse examples + conformance
 |---------|-------------|
 | `make install` | Install Python dependencies + linting tools |
 | `make generate` | Regenerate `.g4` grammar from OMG spec |
+| `make sdk` | Generate ANTLR4 source SDKs for all targets, or one via `LANGUAGE=...` |
+| `make sdk-archive` | Generate all SDKs and package `.build/releases/sysml-v2-sdks-<version>.zip` |
 | `make test` | Compile grammar, parse examples, run conformance tests |
 | `make lint` | Lint Python, YAML, Actions, security audit, drift check |
 | `make format` | Auto-format Python scripts |
@@ -23,6 +26,36 @@ make test              # Validate grammar + parse examples + conformance
 | `make ci` | Full CI pipeline (`lint` + `test` + `contrib`) |
 | `make update-conformance` | Fetch official OMG conformance fixtures |
 | `make help` | Show all targets |
+
+## Generate Target-Language SDKs
+
+ANTLR4 can emit parser source trees for every code generator bundled in the
+pinned toolchain. This repo exposes that directly:
+
+```bash
+make sdk                 # Generate every ANTLR4 target under .build/sdks/
+make sdk LANGUAGE=Cpp    # Generate only the C++ SDK
+make sdk LANGUAGE=Go     # Generate only the Go SDK
+make sdk-archive         # Generate all SDKs + zip them for release use
+```
+
+For the current ANTLR `4.13.2` toolchain, `make sdk` generates source SDKs for:
+
+- `CSharp`
+- `Cpp`
+- `Dart`
+- `Go`
+- `Java`
+- `JavaScript`
+- `PHP`
+- `Python3`
+- `Swift`
+- `TypeScript`
+
+The generated output lives under `.build/sdks/<Language>/` and includes a
+`manifest.json` file describing the grammar version, upstream release tag, and
+generated targets. These SDKs are raw ANTLR output, so language-specific
+runtimes and packaging remain the responsibility of downstream consumers.
 
 ## Updating to a New Upstream Release
 
@@ -52,7 +85,8 @@ git commit -m "chore: update grammar to OMG release 2026-03"
 git push
 ```
 
-The CI workflow will automatically create a GitHub Release with the versioned grammar artifacts.
+The CI workflow will automatically create a GitHub Release with the versioned
+grammar artifacts, contribution zip, and all generated language SDKs.
 
 ### Patch Workflow
 
@@ -108,8 +142,8 @@ The OMG KEBNF spec has known ambiguities and omissions that require post-generat
 The `generate.yml` workflow runs on every push and PR to `main`:
 
 1. **Lint** — Python, YAML, Actions linting + security audit + grammar drift check
-2. **Test** — Compile grammar, parse examples, run conformance, build contribution
-3. **Release** — Publishes a GitHub Release with versioned grammar artifacts (main branch only)
+2. **Test** — Compile grammar, parse examples, run conformance, build contribution, and generate the all-language SDK archive
+3. **Release** — Publishes a GitHub Release with the contribution zip and the all-language SDK zip (main branch only)
 
 The ANTLR4 JAR is downloaded and SHA256-verified automatically on first use.
    (main branch only)

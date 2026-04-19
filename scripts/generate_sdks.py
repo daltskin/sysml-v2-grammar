@@ -194,7 +194,9 @@ def main() -> None:
     supported = discover_languages()
     languages = resolve_languages(args.language, supported)
 
-    args.output_root.mkdir(parents=True, exist_ok=True)
+    # Start from a clean root so the manifest and archive never mix targets from
+    # different runs.
+    ensure_clean_dir(args.output_root)
 
     print("🛠️  Generating ANTLR4 SDKs")
     print(f"   Targets: {', '.join(languages)}")
