@@ -8,10 +8,9 @@ Steps for publishing a new grammar release. Releases are tagged
 ## 1. Pre-release
 
 - [ ] All CI checks pass on `main` (`make ci`)
-- [ ] Grammar compiles with zero ANTLR warnings (`make validate`)
-- [ ] All example files parse successfully (`make test`)
+- [ ] Grammar compiles and all examples parse (`make test`)
 - [ ] grammars-v4 contribution builds and verifies (`make contrib`)
-- [ ] No grammar drift from generator output (`make drift-check`)
+- [ ] No grammar drift from generator output (`make lint`)
 
 ## 2. Bump version
 

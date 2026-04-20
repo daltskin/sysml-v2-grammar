@@ -1,4 +1,4 @@
-.PHONY: help install generate sdk sdk-archive test lint format clean ci update-conformance contrib
+.PHONY: help install generate sdk sdk-archive test lint format clean ci update-conformance contrib version bump-revision
 
 PYTHON     ?= python3
 PIP        ?= pip
@@ -124,6 +124,12 @@ clean: ## Remove generated/cached artifacts
 
 contrib: ## Build and verify grammars-v4 contribution
 	$(PYTHON) scripts/build_contrib.py --verify
+
+version: ## Show current grammar version
+	@jq -r '.grammar_version' scripts/config.json
+
+bump-revision: ## Bump grammar revision (2026.01.0 → 2026.01.1)
+	$(PYTHON) scripts/bump_version.py
 
 # ---------------------------------------------------------------------------
 # CI
