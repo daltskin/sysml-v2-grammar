@@ -1,4 +1,4 @@
-.PHONY: help install generate test lint format clean ci update-conformance contrib
+.PHONY: help install generate sdk sdk-archive test lint format clean ci update-conformance contrib
 
 PYTHON     ?= python3
 PIP        ?= pip
@@ -34,6 +34,12 @@ $(ANTLR_JAR):
 
 generate: ## Regenerate ANTLR4 grammar from OMG spec
 	$(PYTHON) scripts/generate_grammar.py $(if $(TAG),--tag $(TAG)) --cache
+
+sdk: $(ANTLR_JAR) ## Generate ANTLR4 SDKs (all targets, or set LANGUAGE=Cpp)
+	$(PYTHON) scripts/generate_sdks.py $(if $(LANGUAGE),--language $(LANGUAGE))
+
+sdk-archive: $(ANTLR_JAR) ## Generate all ANTLR4 SDKs and package a release zip
+	$(PYTHON) scripts/generate_sdks.py --archive
 
 # ---------------------------------------------------------------------------
 # Test
@@ -122,4 +128,4 @@ contrib: ## Build and verify grammars-v4 contribution
 # CI
 # ---------------------------------------------------------------------------
 
-ci: lint test contrib ## Full CI pipeline
+ci: lint test contrib sdk-archive ## Full CI pipeline

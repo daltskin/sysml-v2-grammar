@@ -61,6 +61,14 @@ jobs:
       - name: Install dependencies
         run: make install
 
+      - name: Read version metadata
+        id: meta
+        run: |
+          TAG=$(jq -r '.release_tag' scripts/config.json)
+          VERSION=$(jq -r '.grammar_version' scripts/config.json)
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
       - name: Fetch conformance fixtures
         run: make update-conformance
 
@@ -70,13 +78,12 @@ jobs:
       - name: Build and verify grammars-v4 contribution
         run: make contrib
 
-      - name: Read version metadata
-        id: meta
+      - name: Build ANTLR SDK release archive
+        run: make sdk-archive
+
+      - name: Assert SDK archive exists
         run: |
-          TAG=$(jq -r '.release_tag' scripts/config.json)
-          VERSION=$(jq -r '.grammar_version' scripts/config.json)
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          test -f ".build/releases/sysml-v2-sdks-${{ steps.meta.outputs.version }}.zip"
 
       - name: Upload grammar artifacts
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6.0.0
@@ -94,6 +101,13 @@ jobs:
         with:
           name: grammars-v4-sysmlv2-${{ steps.meta.outputs.version }}
           path: contrib/sysml/sysmlv2/
+          if-no-files-found: error
+
+      - name: Upload SDK archive
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6.0.0
+        with:
+          name: sysml-v2-sdks-${{ steps.meta.outputs.version }}
+          path: .build/releases/sysml-v2-sdks-${{ steps.meta.outputs.version }}.zip
           if-no-files-found: error
 
   release:
@@ -117,19 +131,14 @@ jobs:
         with:
           node-version: '22'
 
+      - name: Set up Java
+        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654  # v5.2.0
+        with:
+          distribution: temurin
+          java-version: '17'
+
       - name: Install dependencies
         run: make install
-
-      - name: Build contribution
-        run: make contrib
-
-      - name: Package contribution archive
-        id: archive
-        run: |
-          VERSION=$(jq -r '.grammar_version' scripts/config.json)
-          ARCHIVE="grammars-v4-sysmlv2-${VERSION}.zip"
-          cd contrib/sysml && zip -r "../../${ARCHIVE}" sysmlv2/
-          echo "path=${ARCHIVE}" >> "$GITHUB_OUTPUT"
 
       - name: Read version metadata
         id: meta
@@ -138,6 +147,20 @@ jobs:
           VERSION=$(jq -r '.grammar_version' scripts/config.json)
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Build contribution
+        run: make contrib
+
+      - name: Build ANTLR SDK release archive
+        run: make sdk-archive
+
+      - name: Package contribution archive
+        id: archive
+        run: |
+          VERSION=$(jq -r '.grammar_version' scripts/config.json)
+          ARCHIVE="grammars-v4-sysmlv2-${VERSION}.zip"
+          cd contrib/sysml && zip -r "../../${ARCHIVE}" sysmlv2/
+          echo "path=${ARCHIVE}" >> "$GITHUB_OUTPUT"
 
       - name: Check if release already exists
         id: check
@@ -171,9 +194,15 @@ jobs:
             for each grammar release from that spec.
 
             ### Contents
-            The zip contains grammar files, examples, and a ready-to-submit
-            contribution for
-            [antlr/grammars-v4](https://github.com/antlr/grammars-v4).
+            This release ships:
+
+            - `grammars-v4-sysmlv2-${{ steps.meta.outputs.version }}.zip` —
+              grammar files, examples, and a ready-to-submit contribution for
+              [antlr/grammars-v4](https://github.com/antlr/grammars-v4)
+            - `sysml-v2-sdks-${{ steps.meta.outputs.version }}.zip` —
+              generated ANTLR4 source SDKs for every official target bundled
+              with this release
           files: |
             ${{ steps.archive.outputs.path }}
+            .build/releases/sysml-v2-sdks-${{ steps.meta.outputs.version }}.zip
           fail_on_unmatched_files: true
