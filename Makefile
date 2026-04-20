@@ -8,6 +8,7 @@ ANTLR_JAR  := $(BUILD_DIR)/antlr4.jar
 ANTLR_URL  := https://www.antlr.org/download/antlr-$(ANTLR_VER)-complete.jar
 ANTLR_SHA  := eae2dfa119a64327444672aff63e9ec35a20180dc5b8090b7a6ab85125df4d76
 TAG        ?=
+SDK_JOBS   ?= 0
 export PATH := $(HOME)/.local/bin:$(PATH)
 
 help: ## Show this help
@@ -36,10 +37,10 @@ generate: ## Regenerate ANTLR4 grammar from OMG spec
 	$(PYTHON) scripts/generate_grammar.py $(if $(TAG),--tag $(TAG)) --cache
 
 sdk: $(ANTLR_JAR) ## Generate ANTLR4 SDKs (all targets, or set LANGUAGE=Cpp)
-	$(PYTHON) scripts/generate_sdks.py $(if $(LANGUAGE),--language $(LANGUAGE))
+	$(PYTHON) scripts/generate_sdks.py --jobs $(SDK_JOBS) $(if $(LANGUAGE),--language $(LANGUAGE))
 
 sdk-archive: $(ANTLR_JAR) ## Generate all ANTLR4 SDKs and package a release zip
-	$(PYTHON) scripts/generate_sdks.py --archive
+	$(PYTHON) scripts/generate_sdks.py --archive --jobs $(SDK_JOBS)
 
 # ---------------------------------------------------------------------------
 # Test

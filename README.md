@@ -23,7 +23,7 @@ make test              # Validate grammar + parse examples + conformance
 | `make lint` | Lint Python, YAML, Actions, security audit, drift check |
 | `make format` | Auto-format Python scripts |
 | `make clean` | Remove all generated/cached artifacts |
-| `make ci` | Full CI pipeline (`lint` + `test` + `contrib` + `sdk`) |
+| `make ci` | Full CI pipeline (`lint` + `test` + `contrib` + `sdk-archive`) |
 | `make update-conformance` | Fetch official OMG conformance fixtures |
 | `make help` | Show all targets |
 
@@ -36,7 +36,18 @@ pinned toolchain. This repo exposes that directly:
 make sdk                 # Generate every ANTLR4 target under .build/sdks/
 make sdk LANGUAGE=Cpp    # Generate only the C++ SDK
 make sdk LANGUAGE=Go     # Generate only the Go SDK
+make sdk SDK_JOBS=0      # Auto-parallelize by CPU count (fastest)
 make sdk-archive         # Generate all SDKs + zip them for release use
+```
+
+Set `SDK_JOBS=<n>` to control parallel workers (`0` means auto-detect, `1`
+forces serial generation).
+
+By default, SDK output is restricted to paths under `.build/` to avoid
+accidental directory cleanup. To intentionally write outside `.build`, pass:
+
+```bash
+python3 scripts/generate_sdks.py --output-root /tmp/sysml-sdks --allow-outside-build
 ```
 
 For the current ANTLR `4.13.2` toolchain, `make sdk` generates source SDKs for:

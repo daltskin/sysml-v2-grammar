@@ -79,7 +79,7 @@ jobs:
         run: make contrib
 
       - name: Build ANTLR SDK release archive
-        run: make sdk-archive
+        run: make sdk-archive SDK_JOBS=0
 
       - name: Assert SDK archive exists
         run: |
@@ -152,7 +152,7 @@ jobs:
         run: make contrib
 
       - name: Build ANTLR SDK release archive
-        run: make sdk-archive
+        run: make sdk-archive SDK_JOBS=0
 
       - name: Package contribution archive
         id: archive

@@ -13,7 +13,9 @@ Examples:
 from __future__ import annotations
 
 import argparse
+import concurrent.futures
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -96,8 +98,8 @@ def count_generated_files(path: Path) -> int:
     return sum(1 for item in path.rglob("*") if item.is_file())
 
 
-def generate_language(language: str, output_root: Path) -> None:
-    """Generate one target-language SDK with ANTLR4."""
+def generate_language(language: str, output_root: Path) -> tuple[int, str, str, int]:
+    """Generate one target-language SDK with ANTLR4 and return execution details."""
     output_dir = output_root / language
     ensure_clean_dir(output_dir)
 
@@ -121,15 +123,96 @@ def generate_language(language: str, output_root: Path) -> None:
         capture_output=True,
         text=True,
     )
-    if result.returncode != 0:
-        print(f"❌ Failed to generate {language} SDK", file=sys.stderr)
-        if result.stdout.strip():
-            print(result.stdout.strip(), file=sys.stderr)
-        if result.stderr.strip():
-            print(result.stderr.strip(), file=sys.stderr)
-        sys.exit(result.returncode)
 
-    print(f"  ✅ {language:<10} {count_generated_files(output_dir)} file(s)")
+    file_count = count_generated_files(output_dir) if result.returncode == 0 else 0
+    return result.returncode, result.stdout, result.stderr, file_count
+
+
+def resolve_jobs(requested_jobs: int, target_count: int) -> int:
+    """Resolve worker count, supporting 0 as auto-detect."""
+    if requested_jobs < 0:
+        print("❌ --jobs must be >= 0", file=sys.stderr)
+        sys.exit(2)
+
+    if requested_jobs == 0:
+        cpu_count = os.cpu_count() or 1
+        return max(1, min(cpu_count, target_count))
+
+    return max(1, min(requested_jobs, target_count))
+
+
+def validate_output_root(output_root: Path, allow_outside_build: bool) -> None:
+    """Block destructive cleanup outside .build unless explicitly allowed."""
+    if allow_outside_build:
+        return
+
+    resolved_output_root = output_root.expanduser().resolve()
+    resolved_build_dir = BUILD_DIR.resolve()
+    if (
+        resolved_output_root != resolved_build_dir
+        and resolved_build_dir not in resolved_output_root.parents
+    ):
+        print(
+            "❌ Refusing to clean output directory outside .build by default.",
+            file=sys.stderr,
+        )
+        print(f"   Requested: {resolved_output_root}", file=sys.stderr)
+        print(f"   Allowed root: {resolved_build_dir}", file=sys.stderr)
+        print(
+            "   Re-run with --allow-outside-build if this is intentional.",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+
+
+def report_failure(language: str, stdout: str, stderr: str) -> None:
+    """Emit helpful diagnostics for failed SDK target generation."""
+    print(f"❌ Failed to generate {language} SDK", file=sys.stderr)
+    if stdout.strip():
+        print(stdout.strip(), file=sys.stderr)
+    if stderr.strip():
+        print(stderr.strip(), file=sys.stderr)
+
+
+def generate_languages(languages: list[str], output_root: Path, jobs: int) -> None:
+    """Generate all requested SDK targets, optionally in parallel."""
+    results: dict[str, int] = {}
+    failures: list[tuple[str, int, str, str]] = []
+
+    if jobs == 1:
+        for language in languages:
+            code, stdout, stderr, file_count = generate_language(language, output_root)
+            if code != 0:
+                failures.append((language, code, stdout, stderr))
+                continue
+            results[language] = file_count
+    else:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=jobs) as executor:
+            future_map = {
+                executor.submit(generate_language, language, output_root): language
+                for language in languages
+            }
+
+            for future in concurrent.futures.as_completed(future_map):
+                language = future_map[future]
+                try:
+                    code, stdout, stderr, file_count = future.result()
+                except Exception as exc:  # pragma: no cover
+                    failures.append((language, 1, "", str(exc)))
+                    continue
+
+                if code != 0:
+                    failures.append((language, code, stdout, stderr))
+                    continue
+                results[language] = file_count
+
+    if failures:
+        for language, _code, stdout, stderr in failures:
+            report_failure(language, stdout, stderr)
+        sys.exit(failures[0][1])
+
+    for language in languages:
+        print(f"  ✅ {language:<10} {results[language]} file(s)")
 
 
 def write_manifest(output_root: Path, languages: list[str]) -> None:
@@ -189,21 +272,34 @@ def main() -> None:
         action="store_true",
         help="Zip the generated SDKs into .build/releases/",
     )
+    parser.add_argument(
+        "--jobs",
+        type=int,
+        default=1,
+        help="Parallel workers for language generation (0 = auto)",
+    )
+    parser.add_argument(
+        "--allow-outside-build",
+        action="store_true",
+        help="Allow --output-root paths outside .build (dangerous)",
+    )
     args = parser.parse_args()
 
     supported = discover_languages()
     languages = resolve_languages(args.language, supported)
+    jobs = resolve_jobs(args.jobs, len(languages))
 
     # Start from a clean root so the manifest and archive never mix targets from
     # different runs.
+    validate_output_root(args.output_root, args.allow_outside_build)
     ensure_clean_dir(args.output_root)
 
     print("🛠️  Generating ANTLR4 SDKs")
     print(f"   Targets: {', '.join(languages)}")
     print(f"   Output:  {args.output_root}")
+    print(f"   Jobs:    {jobs}")
 
-    for language in languages:
-        generate_language(language, args.output_root)
+    generate_languages(languages, args.output_root, jobs)
 
     write_manifest(args.output_root, languages)
 
