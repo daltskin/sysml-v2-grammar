@@ -2326,6 +2326,34 @@ class Antlr4Transformer:
             }
         )
 
+        # Fix 53: Add metadata cast expression to baseExpression.
+        # SysML v2 allows parenthesized cast syntax `(as MetadataType)` to cast
+        # a metadata annotation to a specific metadata definition type. This
+        # construct is not present in the OMG KEBNF grammar but is used in
+        # practice. The alternative must appear before the parenthesized
+        # sequence expression `LPAREN sequenceExpressionList? RPAREN` to avoid
+        # being consumed as a grouped expression.
+        prev = grammar
+        grammar = grammar.replace(
+            "    | LPAREN sequenceExpressionList? RPAREN\n    ;",
+            "    | LPAREN AS typeReference RPAREN   // metadata cast expression: (as MetadataType)\n"
+            "    | LPAREN sequenceExpressionList? RPAREN\n    ;",
+        )
+        self.applied_patches.append(
+            {
+                "id": "53",
+                "category": "Extension",
+                "summary": "Add metadata cast expression `(as Type)` to `baseExpression`",
+                "description": "SysML v2 allows `(as MetadataType)` as a parenthesized cast "
+                "expression to narrow a metadata annotation to a specific metadata definition "
+                "type. Added `LPAREN AS typeReference RPAREN` as an alternative in "
+                "`baseExpression`, placed before the parenthesized sequence expression to "
+                "avoid ambiguity.",
+                "rules": "baseExpression",
+                "applied": grammar != prev,
+            }
+        )
+
         # Fix 52: Remove unreachable parser rules
         # These rules exist in the KEBNF for metamodel type annotations but are
         # unreachable from rootNamespace in the ANTLR4 grammar. They fall into:
