@@ -5,8 +5,8 @@ OMG SysML v2 KEBNF specification when translated to ANTLR4.
 
 - **Grammar version**: `2026.03.1`
 - **OMG release**: `2026-03`
-- **Total patches**: 56
-- **Applied**: 55
+- **Total patches**: 57
+- **Applied**: 56
 - **Skipped**: 1
 
 ## Spec BNF fix
@@ -433,6 +433,18 @@ Analysis Case Usage Example.sysml uses `= ( //* ... */ )` where the entire expre
 VehicleGeometryAndCoordinateFrames.sysml uses `private attribute` inside a `->forAll { ... }` body expression. The `functionBodyPart` rule only allowed `typeBodyElement` which routes through `featureMember` — too limited for usage elements like `attributeUsage` with visibility modifiers. Added `definitionBodyItem` as an alternative.
 
 **Affected rules**: functionBodyPart
+
+## Extension
+
+| # | Summary | Rules | Applied |
+|---|---------|-------|---------|
+| 53 | Add metadata cast expression `(as Type)` to `baseExpression` | baseExpression | Yes |
+
+### Fix 53: Add metadata cast expression `(as Type)` to `baseExpression`
+
+SysML v2 allows `(as MetadataType)` as a parenthesized cast expression to narrow a metadata annotation to a specific metadata definition type. Added `LPAREN AS typeReference RPAREN` as an alternative in `baseExpression`, placed before the parenthesized sequence expression to avoid ambiguity.
+
+**Affected rules**: baseExpression
 
 ## Dead rule removal
 
