@@ -1,6 +1,6 @@
 {
   "release_tag": "2026-03",
-  "grammar_version": "2026.03.1",
+  "grammar_version": "2026.03.2",
   "release_repo": "Systems-Modeling/SysML-v2-Release",
   "bnf_files": {
     "kerml": "bnf/KerML-textual-bnf.kebnf",
