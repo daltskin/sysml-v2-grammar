@@ -167,9 +167,9 @@ a pull request with regenerated grammar files.
 
 ## Current Spec Version
 
-- **Grammar version**: `2026.03.0`
-- **OMG release**: `2026-03`
-- **Source**: [Systems-Modeling/SysML-v2-Release](https://github.com/Systems-Modeling/SysML-v2-Release/tree/2026-03)
+- **Grammar version**: `2026.04.0`
+- **OMG release**: `2026-04`
+- **Source**: [Systems-Modeling/SysML-v2-Release](https://github.com/Systems-Modeling/SysML-v2-Release/tree/2026-04)
 
 ## Versioning
 
