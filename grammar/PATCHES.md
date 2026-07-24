@@ -3,10 +3,10 @@
 Post-generation patches applied to the ANTLR4 grammar to fix known issues in the
 OMG SysML v2 KEBNF specification when translated to ANTLR4.
 
-- **Grammar version**: `2026.04.0`
-- **OMG release**: `2026-04`
-- **Total patches**: 57
-- **Applied**: 56
+- **Grammar version**: `2026.05.0`
+- **OMG release**: `2026-05`
+- **Total patches**: 54
+- **Applied**: 53
 - **Skipped**: 1
 
 ## Spec BNF fix
@@ -22,7 +22,6 @@ OMG SysML v2 KEBNF specification when translated to ANTLR4.
 | 7 | Make `ASSERT` optional before `SATISFY` | satisfyRequirementUsage | Yes |
 | 8 | Add `ACTION` keyword support to `sendNode` | sendNode | Yes |
 | 9 | Add `returnParameterMember` to `caseBodyItem` | caseBodyItem | Yes |
-| 10 | Define missing `calculationUsageDeclaration` | calculationUsageDeclaration | Yes |
 
 ### Fix 1: Double-THEN in `entryTransitionMember`
 
@@ -78,12 +77,6 @@ The canonical OMG reference model uses `return` inside analysis blocks. Since an
 
 **Affected rules**: caseBodyItem
 
-### Fix 10: Define missing `calculationUsageDeclaration`
-
-Referenced but never defined in the KEBNF spec. Semantically identical to `constraintUsageDeclaration` (`usageDeclaration valuePart?`).
-
-**Affected rules**: calculationUsageDeclaration
-
 ## SLL prediction fix
 
 | # | Summary | Rules | Applied |
@@ -138,8 +131,6 @@ Replaced the 6-alternative `definitionBodyItem` with a factored version. After `
 | 33 | Optional `usageDeclaration` in state/transition rules | successionDeclaration, exhibitStateUsage, transitionDeclaration | Yes |
 | 34 | Optional `usageDeclaration` in constraint/requirement/use case | constraintUsageDeclaration, requirementUsage, useCaseUsage | Yes |
 | 35 | Optional `usageDeclaration` in `flowDeclaration`; remove redundant alternative | flowDeclaration | Yes |
-| 36 | Simplify `payloadFeature` alternatives | payloadFeature | Yes |
-| 37 | Remove redundant `payloadFeatureSpecializationPart` alternative | payloadFeatureSpecializationPart | Yes |
 
 ### Fix 13: Rewrite `identification` to prevent empty match
 
@@ -242,18 +233,6 @@ Made `usageDeclaration` optional in `constraintUsageDeclaration`, requirement us
 Made `usageDeclaration` optional and removed the redundant `flowEndMember TO flowEndMember` alternative (already covered by the preceding alternative with optional parts).
 
 **Affected rules**: flowDeclaration
-
-### Fix 36: Simplify `payloadFeature` alternatives
-
-Uses `identification?` consistently and removes redundant alternatives that are subsumed by optional identification.
-
-**Affected rules**: payloadFeature
-
-### Fix 37: Remove redundant `payloadFeatureSpecializationPart` alternative
-
-The third alternative `( featureSpecialization )+` is identical to the first `featureSpecialization+`. Removed the duplicate.
-
-**Affected rules**: payloadFeatureSpecializationPart
 
 ## Structural optimization
 

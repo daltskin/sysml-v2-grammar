@@ -963,19 +963,10 @@ class Antlr4Transformer:
             rules="caseBodyItem",
         )
 
-        # Fix 10: calculationUsageDeclaration is referenced but never defined in
-        # the KEBNF spec.
-        patch(
-            "10",
-            "Spec BNF fix",
-            "Define missing `calculationUsageDeclaration`",
-            "Referenced but never defined in the KEBNF spec. Semantically identical to "
-            "`constraintUsageDeclaration` (`usageDeclaration valuePart?`).",
-            "calculationUsageDeclaration\n"
-            "    : IDENTIFIER  /* TODO: stub for calculationUsageDeclaration */",
-            "calculationUsageDeclaration\n    : usageDeclaration? valuePart?",
-            rules="calculationUsageDeclaration",
-        )
+        # (Former Fix 10 "Define missing calculationUsageDeclaration" removed:
+        # obsolete as of the OMG 2026-05 release, which rewrote CalculationUsage
+        # to use ActionUsageDeclaration and dropped the dangling
+        # CalculationUsageDeclaration reference, so no stub is emitted anymore.)
 
         # Fix 11: SLL mode ambiguity with qualifiedName | ownedFeatureChain.
         # The SysML KEBNF redefines rules like OwnedSubsetting with
@@ -1771,48 +1762,12 @@ class Antlr4Transformer:
             rules="flowDeclaration",
         )
 
-        # Fix 36: payloadFeature — simplify and reorder.
-        patch(
-            "36",
-            "Extension compatibility",
-            "Simplify `payloadFeature` alternatives",
-            "Uses `identification?` consistently and removes redundant alternatives that are "
-            "subsumed by optional identification.",
-            "payloadFeature\n"
-            "    : identification payloadFeatureSpecializationPart valuePart?\n"
-            "    | identification valuePart\n"
-            "    | ownedFeatureTyping ( ownedMultiplicity )?\n"
-            "    | ownedMultiplicity ( ownedFeatureTyping )?\n"
-            "    | identification? payloadFeatureSpecializationPart valuePart?\n"
-            "    | ownedMultiplicity ownedFeatureTyping\n"
-            "    ;",
-            "payloadFeature\n"
-            "    : identification? valuePart\n"
-            "    | identification? payloadFeatureSpecializationPart valuePart?\n"
-            "    | ownedFeatureTyping ( ownedMultiplicity )?\n"
-            "    | ownedMultiplicity ( ownedFeatureTyping )?\n"
-            "    ;",
-            rules="payloadFeature",
-        )
-
-        # Fix 37: payloadFeatureSpecializationPart — remove redundant alternative.
-        patch(
-            "37",
-            "Extension compatibility",
-            "Remove redundant `payloadFeatureSpecializationPart` alternative",
-            "The third alternative `( featureSpecialization )+` is identical to the first "
-            "`featureSpecialization+`. Removed the duplicate.",
-            "payloadFeatureSpecializationPart\n"
-            "    : featureSpecialization+ multiplicityPart? featureSpecialization*\n"
-            "    | multiplicityPart featureSpecialization+\n"
-            "    | ( featureSpecialization )+ multiplicityPart? featureSpecialization*\n"
-            "    ;",
-            "payloadFeatureSpecializationPart\n"
-            "    : featureSpecialization+ multiplicityPart? featureSpecialization*\n"
-            "    | multiplicityPart featureSpecialization+\n"
-            "    ;",
-            rules="payloadFeatureSpecializationPart",
-        )
+        # (Former Fix 36 "Simplify payloadFeature alternatives" and Fix 37
+        # "Remove redundant payloadFeatureSpecializationPart alternative" removed:
+        # obsolete as of the OMG 2026-05 release. Upstream normalized
+        # `( FeatureSpecialization )+` to `FeatureSpecialization+`, so the
+        # generated rules no longer contain the redundant alternatives these
+        # patches targeted.)
 
         # ============================================================
         # ANTLR warning(154) fixes (Fix 38)
@@ -2746,19 +2701,27 @@ class Antlr4Transformer:
             return
 
         rule = self.rules["FilterPackage"]
+        # Import references that lead back to ImportDeclaration and must be
+        # replaced with the non-recursive FilterPackageImportDeclaration.
+        # As of the OMG 2026-05 release the SysML kebnf redefines FilterPackage
+        # via an intermediate `FilterPackageImport : Import = ImportDeclaration`
+        # rule, so both names have to be broken to avoid re-introducing the
+        # mutual left-recursion cycle.
+        recursive_import_refs = {"ImportDeclaration", "FilterPackageImport"}
         new_alts = []
+        seen_alt_keys = set()
         for alt in rule.alternatives:
             # Check if this alt starts with ImportDeclaration or an import reference
             has_import_ref = any(
-                isinstance(e, NonTerminal) and e.name == "ImportDeclaration"
+                isinstance(e, NonTerminal) and e.name in recursive_import_refs
                 for e in alt
             )
             if has_import_ref:
-                # Replace ImportDeclaration with non-recursive inline:
+                # Replace the import reference with non-recursive inline:
                 # ( membershipImport | namespaceImportDirect ) instead
                 new_elements = []
                 for e in alt:
-                    if isinstance(e, NonTerminal) and e.name == "ImportDeclaration":
+                    if isinstance(e, NonTerminal) and e.name in recursive_import_refs:
                         # Inline: (MembershipImport | NamespaceImportDirect)
                         # where NamespaceImportDirect is the non-FilterPackage alt of NamespaceImport
                         new_elements.append(
@@ -2766,10 +2729,28 @@ class Antlr4Transformer:
                         )
                     else:
                         new_elements.append(e)
-                new_alts.append(new_elements)
             else:
-                new_alts.append(alt)
+                new_elements = list(alt)
+            # De-duplicate: the KerML (ImportDeclaration) and SysML
+            # (FilterPackageImport) definitions of FilterPackage collapse to
+            # the same non-recursive alternative once rewritten.
+            alt_key = tuple(
+                e.name if isinstance(e, NonTerminal) else repr(e) for e in new_elements
+            )
+            if alt_key in seen_alt_keys:
+                continue
+            seen_alt_keys.add(alt_key)
+            new_alts.append(new_elements)
         rule.alternatives = new_alts
+
+        # Drop the now-orphaned FilterPackageImport rule (2026-05+). It is no
+        # longer referenced after the rewrite above and, since it expands to
+        # ImportDeclaration, leaving it in place would keep the left-recursion
+        # cycle alive and emit a dead rule.
+        if "FilterPackageImport" in self.rules:
+            del self.rules["FilterPackageImport"]
+            if "FilterPackageImport" in self.rule_order:
+                self.rule_order.remove("FilterPackageImport")
 
         # Create the helper rule FilterPackageImportDeclaration
         # which is ImportDeclaration minus the FilterPackage path
