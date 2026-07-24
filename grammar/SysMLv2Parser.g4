@@ -281,7 +281,6 @@ namespaceImport
 
 filterPackage
     : filterPackageImportDeclaration ( filterPackageMember )+
-    | filterPackageImport ( filterPackageMember )+
     ;
 
 filterPackageMember
@@ -911,10 +910,6 @@ packageBodyElement
 
 packageMember
     : memberPrefix ( definitionElement | usageElement )
-    ;
-
-filterPackageImport
-    : importDeclaration
     ;
 
 definitionElement
