@@ -3,11 +3,11 @@
 Post-generation patches applied to the ANTLR4 grammar to fix known issues in the
 OMG SysML v2 KEBNF specification when translated to ANTLR4.
 
-- **Grammar version**: `2026.04.0`
-- **OMG release**: `2026-04`
+- **Grammar version**: `2026.05.0`
+- **OMG release**: `2026-05`
 - **Total patches**: 57
-- **Applied**: 56
-- **Skipped**: 1
+- **Applied**: 53
+- **Skipped**: 4
 
 ## Spec BNF fix
 
@@ -22,7 +22,7 @@ OMG SysML v2 KEBNF specification when translated to ANTLR4.
 | 7 | Make `ASSERT` optional before `SATISFY` | satisfyRequirementUsage | Yes |
 | 8 | Add `ACTION` keyword support to `sendNode` | sendNode | Yes |
 | 9 | Add `returnParameterMember` to `caseBodyItem` | caseBodyItem | Yes |
-| 10 | Define missing `calculationUsageDeclaration` | calculationUsageDeclaration | Yes |
+| 10 | Define missing `calculationUsageDeclaration` | calculationUsageDeclaration | No |
 
 ### Fix 1: Double-THEN in `entryTransitionMember`
 
@@ -138,8 +138,8 @@ Replaced the 6-alternative `definitionBodyItem` with a factored version. After `
 | 33 | Optional `usageDeclaration` in state/transition rules | successionDeclaration, exhibitStateUsage, transitionDeclaration | Yes |
 | 34 | Optional `usageDeclaration` in constraint/requirement/use case | constraintUsageDeclaration, requirementUsage, useCaseUsage | Yes |
 | 35 | Optional `usageDeclaration` in `flowDeclaration`; remove redundant alternative | flowDeclaration | Yes |
-| 36 | Simplify `payloadFeature` alternatives | payloadFeature | Yes |
-| 37 | Remove redundant `payloadFeatureSpecializationPart` alternative | payloadFeatureSpecializationPart | Yes |
+| 36 | Simplify `payloadFeature` alternatives | payloadFeature | No |
+| 37 | Remove redundant `payloadFeatureSpecializationPart` alternative | payloadFeatureSpecializationPart | No |
 
 ### Fix 13: Rewrite `identification` to prevent empty match
 

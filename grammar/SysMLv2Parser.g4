@@ -769,10 +769,11 @@ payloadFeatureMember
     ;
 
 payloadFeature
-    : identification? valuePart
-    | identification? payloadFeatureSpecializationPart valuePart?
+    : identification payloadFeatureSpecializationPart valuePart?
+    | identification valuePart
     | ownedFeatureTyping ( ownedMultiplicity )?
-    | ownedMultiplicity ( ownedFeatureTyping )?
+    | ownedMultiplicity ownedFeatureTyping
+    | identification? payloadFeatureSpecializationPart valuePart?
     ;
 
 payloadFeatureSpecializationPart
@@ -898,7 +899,7 @@ dependencyDeclaration
     ;
 
 annotatingMember
-    : annotatingElement
+    : memberPrefix annotatingElement
     ;
 
 packageBodyElement
@@ -910,6 +911,10 @@ packageBodyElement
 
 packageMember
     : memberPrefix ( definitionElement | usageElement )
+    ;
+
+filterPackageImport
+    : importDeclaration
     ;
 
 definitionElement
@@ -1912,8 +1917,8 @@ framedConcernMember
     ;
 
 framedConcernUsage
-    : ownedReferenceSubsetting featureSpecializationPart? calculationBody
-    | ( usageExtensionKeyword* CONCERN | usageExtensionKeyword+ ) calculationUsageDeclaration calculationBody
+    : ownedReferenceSubsetting featureSpecializationPart? requirementBody
+    | ( usageExtensionKeyword* CONCERN | usageExtensionKeyword+ ) constraintUsageDeclaration requirementBody
     ;
 
 actorMember
@@ -2135,10 +2140,6 @@ namespaceImportDirect
 // These rules are referenced in the spec but not fully defined.
 // They need manual review and completion.
 
-calculationUsageDeclaration
-    : usageDeclaration? valuePart?
-    ;
-
 emptyActionUsage_
     : /* epsilon */
     ;
@@ -2153,10 +2154,6 @@ emptyMultiplicity_
 
 emptyUsage_
     : /* epsilon */
-    ;
-
-filterPackageImport
-    : IDENTIFIER  /* TODO: stub for filterPackageImport */
     ;
 
 nonFeatureChainPrimaryExpression
