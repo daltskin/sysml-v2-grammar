@@ -21,33 +21,40 @@ options {
 
 ownedExpression
     : IF ownedExpression QUESTION ownedExpression ELSE ownedExpression
-    | ownedExpression QUESTION_QUESTION ownedExpression
-    | ownedExpression IMPLIES ownedExpression
-    | ownedExpression OR ownedExpression
-    | ownedExpression AND ownedExpression
-    | ownedExpression XOR ownedExpression
-    | ownedExpression PIPE ownedExpression
-    | ownedExpression AMP ownedExpression
-    | ownedExpression ( EQ_EQ | BANG_EQ | EQ_EQ_EQ | BANG_EQ_EQ ) ownedExpression
-    | ownedExpression ( LT | GT | LE | GE ) ownedExpression
-    | ownedExpression DOT_DOT ownedExpression
-    | ownedExpression ( PLUS | MINUS ) ownedExpression
-    | ownedExpression ( STAR | SLASH | PERCENT ) ownedExpression
-    | <assoc=right> ownedExpression ( STAR_STAR | CARET ) ownedExpression
-    | ( PLUS | MINUS | TILDE | NOT ) ownedExpression
+    | operatorExpression
+    ;
+
+operatorExpression
+    : unaryExpression
+    | <assoc=right> operatorExpression ( STAR_STAR | CARET ) operatorExpression
+    | operatorExpression ( STAR | SLASH | PERCENT ) operatorExpression
+    | operatorExpression ( PLUS | MINUS ) operatorExpression
+    | operatorExpression DOT_DOT operatorExpression
+    | operatorExpression ( LT | GT | LE | GE ) operatorExpression
+    | operatorExpression ( ISTYPE | HASTYPE | AT_SIGN | AT_AT | AS | META ) typeReference
+    | operatorExpression ( EQ_EQ | BANG_EQ | EQ_EQ_EQ | BANG_EQ_EQ ) operatorExpression
+    | operatorExpression ( AMP | AND ) operatorExpression
+    | operatorExpression XOR operatorExpression
+    | operatorExpression ( PIPE | OR ) operatorExpression
+    | operatorExpression IMPLIES operatorExpression
+    | operatorExpression QUESTION_QUESTION operatorExpression
+    ;
+
+unaryExpression
+    : ( PLUS | MINUS | TILDE | NOT ) unaryExpression
     | ( AT_SIGN | AT_AT ) typeReference
-    | ownedExpression ( ISTYPE | HASTYPE | AT_SIGN ) typeReference
-    | ownedExpression AS typeReference
-    | ownedExpression AT_AT typeReference
-    | ownedExpression META typeReference
-    | ownedExpression LBRACK sequenceExpressionList? RBRACK
-    | ownedExpression HASH LPAREN sequenceExpressionList? RPAREN
-    | ownedExpression argumentList
-    | ownedExpression DOT qualifiedName
-    | ownedExpression DOT_QUESTION bodyExpression
-    | ownedExpression ARROW qualifiedName ( bodyExpression | argumentList )
     | ALL typeReference
-    | baseExpression
+    | primaryExpression
+    ;
+
+primaryExpression
+    : baseExpression
+    | primaryExpression DOT qualifiedName
+    | primaryExpression DOT_QUESTION bodyExpression
+    | primaryExpression ARROW qualifiedName ( bodyExpression | argumentList )
+    | primaryExpression LBRACK sequenceExpressionList? RBRACK
+    | primaryExpression HASH LPAREN sequenceExpressionList? RPAREN
+    | primaryExpression argumentList
     ;
 
 typeReference

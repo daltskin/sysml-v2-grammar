@@ -709,6 +709,9 @@ class Antlr4Transformer:
         # Rules defined by expression generator
         expr_defined = {
             "ownedExpression",
+            "operatorExpression",
+            "unaryExpression",
+            "primaryExpression",
             "typeReference",
             "sequenceExpressionList",
             "baseExpression",
@@ -2448,12 +2451,13 @@ class Antlr4Transformer:
     def _get_expression_rule_names(self) -> Set[str]:
         """Rules handled by the expression precedence generator.
 
-        These are either rewritten into the precedence-climbing ownedExpression
-        rule, or emitted as dedicated helper rules in _generate_expression_rules().
+        These are either rewritten into the ownedExpression and
+        operatorExpression rules, or emitted as dedicated helper rules in
+        _generate_expression_rules().
         They must be excluded from the main rule generation loop.
         """
         return {
-            # Core expression chain (rewritten into ownedExpression)
+            # Core expression chain
             "OwnedExpression",
             "ConditionalExpression",
             "ConditionalBinaryOperatorExpression",
@@ -2527,46 +2531,65 @@ class Antlr4Transformer:
         """
         lines = []
 
-        # Main expression rule with precedence alternatives
+        # Conditional expressions have the lowest precedence.
         lines.append("ownedExpression")
         lines.append(
             "    : IF ownedExpression QUESTION ownedExpression ELSE ownedExpression"
         )
-        lines.append("    | ownedExpression QUESTION_QUESTION ownedExpression")
-        lines.append("    | ownedExpression IMPLIES ownedExpression")
-        lines.append("    | ownedExpression OR ownedExpression")
-        lines.append("    | ownedExpression AND ownedExpression")
-        lines.append("    | ownedExpression XOR ownedExpression")
-        lines.append("    | ownedExpression PIPE ownedExpression")
-        lines.append("    | ownedExpression AMP ownedExpression")
+        lines.append("    | operatorExpression")
+        lines.append("    ;")
+        lines.append("")
+
+        # Binary operator precedence.
+        lines.append("operatorExpression")
+        lines.append("    : unaryExpression")
         lines.append(
-            "    | ownedExpression ( EQ_EQ | BANG_EQ | EQ_EQ_EQ | BANG_EQ_EQ ) ownedExpression"
+            "    | <assoc=right> operatorExpression ( STAR_STAR | CARET ) operatorExpression"
         )
-        lines.append("    | ownedExpression ( LT | GT | LE | GE ) ownedExpression")
-        lines.append("    | ownedExpression DOT_DOT ownedExpression")
-        lines.append("    | ownedExpression ( PLUS | MINUS ) ownedExpression")
-        lines.append("    | ownedExpression ( STAR | SLASH | PERCENT ) ownedExpression")
         lines.append(
-            "    | <assoc=right> ownedExpression ( STAR_STAR | CARET ) ownedExpression"
+            "    | operatorExpression ( STAR | SLASH | PERCENT ) operatorExpression"
         )
-        lines.append("    | ( PLUS | MINUS | TILDE | NOT ) ownedExpression")
+        lines.append("    | operatorExpression ( PLUS | MINUS ) operatorExpression")
+        lines.append("    | operatorExpression DOT_DOT operatorExpression")
+        lines.append(
+            "    | operatorExpression ( LT | GT | LE | GE ) operatorExpression"
+        )
+        lines.append(
+            "    | operatorExpression ( ISTYPE | HASTYPE | AT_SIGN | AT_AT | AS | META ) typeReference"
+        )
+        lines.append(
+            "    | operatorExpression ( EQ_EQ | BANG_EQ | EQ_EQ_EQ | BANG_EQ_EQ ) operatorExpression"
+        )
+        lines.append("    | operatorExpression ( AMP | AND ) operatorExpression")
+        lines.append("    | operatorExpression XOR operatorExpression")
+        lines.append("    | operatorExpression ( PIPE | OR ) operatorExpression")
+        lines.append("    | operatorExpression IMPLIES operatorExpression")
+        lines.append("    | operatorExpression QUESTION_QUESTION operatorExpression")
+        lines.append("    ;")
+        lines.append("")
+
+        # Unary expressions bind more tightly than binary expressions.
+        lines.append("unaryExpression")
+        lines.append("    : ( PLUS | MINUS | TILDE | NOT ) unaryExpression")
         lines.append("    | ( AT_SIGN | AT_AT ) typeReference")
-        lines.append(
-            "    | ownedExpression ( ISTYPE | HASTYPE | AT_SIGN ) typeReference"
-        )
-        lines.append("    | ownedExpression AS typeReference")
-        lines.append("    | ownedExpression AT_AT typeReference")
-        lines.append("    | ownedExpression META typeReference")
-        lines.append("    | ownedExpression LBRACK sequenceExpressionList? RBRACK")
-        lines.append("    | ownedExpression HASH LPAREN sequenceExpressionList? RPAREN")
-        lines.append("    | ownedExpression argumentList")
-        lines.append("    | ownedExpression DOT qualifiedName")
-        lines.append("    | ownedExpression DOT_QUESTION bodyExpression")
-        lines.append(
-            "    | ownedExpression ARROW qualifiedName ( bodyExpression | argumentList )"
-        )
         lines.append("    | ALL typeReference")
-        lines.append("    | baseExpression")
+        lines.append("    | primaryExpression")
+        lines.append("    ;")
+        lines.append("")
+
+        # Primary postfix forms bind more tightly than unary expressions.
+        lines.append("primaryExpression")
+        lines.append("    : baseExpression")
+        lines.append("    | primaryExpression DOT qualifiedName")
+        lines.append("    | primaryExpression DOT_QUESTION bodyExpression")
+        lines.append(
+            "    | primaryExpression ARROW qualifiedName ( bodyExpression | argumentList )"
+        )
+        lines.append("    | primaryExpression LBRACK sequenceExpressionList? RBRACK")
+        lines.append(
+            "    | primaryExpression HASH LPAREN sequenceExpressionList? RPAREN"
+        )
+        lines.append("    | primaryExpression argumentList")
         lines.append("    ;")
         lines.append("")
 
