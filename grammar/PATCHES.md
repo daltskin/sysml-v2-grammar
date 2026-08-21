@@ -3,11 +3,26 @@
 Post-generation patches applied to the ANTLR4 grammar to fix known issues in the
 OMG SysML v2 KEBNF specification when translated to ANTLR4.
 
-- **Grammar version**: `2026.05.1`
+- **Grammar version**: `2026.05.0`
 - **OMG release**: `2026-05`
 - **Total patches**: 54
-- **Applied**: 53
-- **Skipped**: 1
+- **Applied**: 52
+- **Skipped**: 2
+
+## Expression scope ledger
+
+The expression changes are limited to the generated `ownedExpression` precedence order and the directly required primary boundaries. Each row has a distinguishing regression; restoring the corresponding hunk reproduces the listed failure.
+Non-empty `functionBodyPart` ambiguity is inherited from the base grammar and remains a separate body follow-up; this patch covers only empty-body postfix boundaries and makes no claim about non-empty body acceptance.
+
+| Generated hunk | Official evidence | Distinguishing regression | Restore failure |
+|---|---|---|---|
+| `ownedExpression` tier order and final conditional alternative | [KEBNF operator productions](https://github.com/Systems-Modeling/SysML-v2-Release/blob/de1070ae8e79c21532b8004fc663d47b35d0e9fa/bnf/KerML-textual-bnf.kebnf#L932-L969); [OMG Table 6](https://www.omg.org/spec/KerML/1.0/PDF#page=124) | `a + b * c`; `a == b & c xor d | e implies f ?? g`; `if a ? b else c + d` | Base order groups lower-precedence operators inside higher-precedence operands and lets the trailing operator escape the `else` branch. |
+| Right-associative exponentiation tier | [KEBNF associativity note](https://github.com/Systems-Modeling/SysML-v2-Release/blob/de1070ae8e79c21532b8004fc663d47b35d0e9fa/bnf/KerML-textual-bnf.kebnf#L1061-L1064) | `a * b ** c`; `a ** b * c`; `a ** b ** c`; `a ^ b ^ c` | Base emission places exponentiation below multiplication in the ANTLR alternative order, so adjacent-tier grouping is wrong; the explicit right-associative marker alone does not repair that precedence. |
+| Classification/metaclassification and type-reference boundaries | [KEBNF classification productions](https://github.com/Systems-Modeling/SysML-v2-Release/blob/de1070ae8e79c21532b8004fc663d47b35d0e9fa/bnf/KerML-textual-bnf.kebnf#L979-L1037) | `a istype T + b`; `a istype T as U`; `a + b @@ T`; `a @@ T @@ U` | Restoring the boundary loses recursive raw-KEBNF forms or accepts the invalid chained metaclassification form. |
+| `primaryExpression` postfix boundary | [KEBNF primary-expression productions](https://github.com/Systems-Modeling/SysML-v2-Release/blob/de1070ae8e79c21532b8004fc663d47b35d0e9fa/bnf/KerML-textual-bnf.kebnf#L1068-L1178); [official Pilot primary rules](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/blob/fa709f28dfd49dfdb7ee83e4e19da2f57e0eb3aa/org.omg.kerml.expressions.xtext/src/org/omg/kerml/expressions/xtext/KerMLExpressions.xtext#L300-L324) | `-a.f`; `not a.f`; `~a[1]`; `-a->F()`; `all T.f`; `istype T.f` | Restoring direct-left-recursive postfix alternatives changes the official grouping `-(a.f)` to `(-a).f`, and permits postfix continuation after `all` or classification operands. |
+| Empty-parenthesized boundary | [KEBNF `NullExpression`](https://github.com/Systems-Modeling/SysML-v2-Release/blob/de1070ae8e79c21532b8004fc663d47b35d0e9fa/bnf/KerML-textual-bnf.kebnf#L1182-L1193) | `()` | The PR base reaches `()` through both `nullExpression` and optional `sequenceExpressionList`, producing one exact ambiguity; retaining one path preserves acceptance with zero ambiguity. |
+| Skipped Fix 53 metadata-cast base alternative | [KEBNF classification production](https://github.com/Systems-Modeling/SysML-v2-Release/blob/de1070ae8e79c21532b8004fc663d47b35d0e9fa/bnf/KerML-textual-bnf.kebnf#L979-L985) | `(as T).isMandatory` | Restoring Fix 53 creates an exact ambiguity; the direct `AS` classification alternative accepts this form without the duplicate base production. |
+| Sequence, invocation, and constructor primary boundaries | [KEBNF primary/base productions](https://github.com/Systems-Modeling/SysML-v2-Release/blob/de1070ae8e79c21532b8004fc663d47b35d0e9fa/bnf/KerML-textual-bnf.kebnf#L1068-L1233) | `a[1,]`; `a#(1,)`; `a.f.g()`; `new A.B()`; `a[]` | Base accepts empty sequence/index forms, does not preserve trailing commas, or rejects a qualified feature-chain invocation. |
 
 ## Spec BNF fix
 
@@ -417,11 +432,11 @@ VehicleGeometryAndCoordinateFrames.sysml uses `private attribute` inside a `->fo
 
 | # | Summary | Rules | Applied |
 |---|---------|-------|---------|
-| 53 | Add metadata cast expression `(as Type)` to `baseExpression` | baseExpression | Yes |
+| 53 | Add metadata cast expression `(as Type)` to `baseExpression` | baseExpression | No |
 
 ### Fix 53: Add metadata cast expression `(as Type)` to `baseExpression`
 
-SysML v2 allows `(as MetadataType)` as a parenthesized cast expression to narrow a metadata annotation to a specific metadata definition type. Added `LPAREN AS typeReference RPAREN` as an alternative in `baseExpression`, placed before the parenthesized sequence expression to avoid ambiguity.
+Skipped because the direct ``AS`` classification alternative covers the same parenthesized form without a duplicate base production.
 
 **Affected rules**: baseExpression
 

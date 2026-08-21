@@ -20,41 +20,39 @@ options {
 // ===== Expression rules (precedence-climbing) =====
 
 ownedExpression
-    : IF ownedExpression QUESTION ownedExpression ELSE ownedExpression
-    | operatorExpression
-    ;
-
-operatorExpression
-    : unaryExpression
-    | <assoc=right> operatorExpression ( STAR_STAR | CARET ) operatorExpression
-    | operatorExpression ( STAR | SLASH | PERCENT ) operatorExpression
-    | operatorExpression ( PLUS | MINUS ) operatorExpression
-    | operatorExpression DOT_DOT operatorExpression
-    | operatorExpression ( LT | GT | LE | GE ) operatorExpression
-    | operatorExpression ( ISTYPE | HASTYPE | AT_SIGN | AT_AT | AS | META ) typeReference
-    | operatorExpression ( EQ_EQ | BANG_EQ | EQ_EQ_EQ | BANG_EQ_EQ ) operatorExpression
-    | operatorExpression ( AMP | AND ) operatorExpression
-    | operatorExpression XOR operatorExpression
-    | operatorExpression ( PIPE | OR ) operatorExpression
-    | operatorExpression IMPLIES operatorExpression
-    | operatorExpression QUESTION_QUESTION operatorExpression
-    ;
-
-unaryExpression
-    : ( PLUS | MINUS | TILDE | NOT ) unaryExpression
-    | ( AT_SIGN | AT_AT ) typeReference
+    : ( ISTYPE | HASTYPE | AT_SIGN | AS ) typeReference
     | ALL typeReference
+    | ( PLUS | MINUS | TILDE | NOT ) ownedExpression
+    | <assoc=right> ownedExpression ( STAR_STAR | CARET ) ownedExpression
+    | ownedExpression ( STAR | SLASH | PERCENT ) ownedExpression
+    | ownedExpression ( PLUS | MINUS ) ownedExpression
+    | ownedExpression DOT_DOT ownedExpression
+    | ownedExpression ( LT | GT | LE | GE ) ownedExpression
+    | ownedExpression ( ISTYPE | HASTYPE | AT_SIGN ) typeReference
+    | ownedExpression AS typeReference
+    | ownedExpression ( EQ_EQ | BANG_EQ | EQ_EQ_EQ | BANG_EQ_EQ ) ownedExpression
+    | ownedExpression ( AMP | AND ) ownedExpression
+    | ownedExpression XOR ownedExpression
+    | ownedExpression ( PIPE | OR ) ownedExpression
+    | ownedExpression IMPLIES ownedExpression
+    | ownedExpression QUESTION_QUESTION ownedExpression
     | primaryExpression
+    | IF ownedExpression QUESTION ownedExpression ELSE ownedExpression
     ;
 
 primaryExpression
-    : baseExpression
-    | primaryExpression DOT qualifiedName
-    | primaryExpression DOT_QUESTION bodyExpression
-    | primaryExpression ARROW qualifiedName ( bodyExpression | argumentList )
-    | primaryExpression LBRACK sequenceExpressionList? RBRACK
-    | primaryExpression HASH LPAREN sequenceExpressionList? RPAREN
-    | primaryExpression argumentList
+    : qualifiedName ( AT_AT | META ) typeReference
+    | baseExpression
+      ( DOT featureChainMember )?
+      (
+        ( LBRACK sequenceExpressionList RBRACK
+        | HASH LPAREN sequenceExpressionList RPAREN
+        | ARROW featureChainMember ( bodyExpression | qualifiedName | argumentList )
+        | DOT bodyExpression
+        | DOT_QUESTION bodyExpression
+        )
+        ( DOT featureChainMember )?
+      )*
     ;
 
 typeReference
@@ -62,23 +60,22 @@ typeReference
     ;
 
 sequenceExpressionList
-    : ownedExpression ( COMMA ownedExpression )*
+    : ownedExpression ( COMMA ownedExpression )* COMMA?
     ;
 
 baseExpression
     : nullExpression
     | REGULAR_COMMENT   // ignore block comments used as expression placeholders
     | literalExpression
+    | qualifiedName DOT qualifiedName ( DOT qualifiedName )* argumentList
     | qualifiedName ( argumentList | DOT METADATA )?   // merged featureRef/metadataAccess/invocation
     | constructorExpression
     | bodyExpression
-    | LPAREN AS typeReference RPAREN   // metadata cast expression: (as MetadataType)
     | LPAREN sequenceExpressionList? RPAREN
     ;
 
 nullExpression
     : NULL
-    | LPAREN RPAREN
     ;
 
 featureReferenceExpression
@@ -86,7 +83,7 @@ featureReferenceExpression
     ;
 
 constructorExpression
-    : NEW qualifiedName argumentList
+    : NEW featureChainMember argumentList
     ;
 
 bodyExpression
