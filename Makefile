@@ -53,7 +53,13 @@ test: $(ANTLR_JAR) ## Validate grammar, parse examples, run conformance
 		grammar/SysMLv2Lexer.g4 grammar/SysMLv2Parser.g4
 	@echo "✅ Grammar compiles"
 	@echo ""
-	@echo "── Parsing example files ──"
+	@echo "── Running focused expression regressions (Python target) ──"
+	@mkdir -p $(BUILD_DIR)/antlr-python
+	java -jar $(ANTLR_JAR) -Dlanguage=Python3 -o $(BUILD_DIR)/antlr-python \
+		grammar/SysMLv2Lexer.g4 grammar/SysMLv2Parser.g4
+	PYTHONPATH="$(CURDIR)/$(BUILD_DIR)/antlr-python" $(PYTHON) scripts/ExpressionGrammarTest.py
+	@echo ""
+	@echo "── Parsing example files (Java target) ──"
 	@mkdir -p $(BUILD_DIR)/antlr-test
 	java -jar $(ANTLR_JAR) -Dlanguage=Java -o $(BUILD_DIR)/antlr-test \
 		grammar/SysMLv2Lexer.g4 grammar/SysMLv2Parser.g4
