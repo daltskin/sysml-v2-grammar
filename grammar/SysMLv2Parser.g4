@@ -33,15 +33,15 @@ impliesExpression
     ;
 
 orExpression
-    : andExpression ( ( OR | PIPE ) andExpression )*
-    ;
-
-andExpression
-    : xorExpression ( ( AND | AMP ) xorExpression )*
+    : xorExpression ( ( OR | PIPE ) xorExpression )*
     ;
 
 xorExpression
-    : equalityExpression ( XOR equalityExpression )*
+    : andExpression ( XOR andExpression )*
+    ;
+
+andExpression
+    : equalityExpression ( ( AND | AMP ) equalityExpression )*
     ;
 
 equalityExpression

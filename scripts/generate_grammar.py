@@ -420,15 +420,18 @@ class KebnfParser:
 # ANTLR4 Transformer
 # ---------------------------------------------------------------------------
 
-# Operator precedence from SysML v2 spec Table 6 (lowest to highest)
+# Operator precedence from SysML v2 spec Table 6 (lowest to highest).
+# Logical order per the OMG XText reference grammar (KerMLExpressions.xtext):
+# ImpliesExpression -> OrExpression -> XorExpression -> AndExpression ->
+# EqualityExpression, i.e. 'and' binds TIGHTER than 'xor'.
 OPERATOR_PRECEDENCE = [
     # (operators, name, associativity)
     (["if"], "conditional", "none"),  # Ternary if ? : else
     (["??"], "nullCoalescing", "left"),
     (["implies"], "implies", "left"),
     (["or"], "logicalOr", "left"),
-    (["and"], "logicalAnd", "left"),
     (["xor"], "xor", "left"),
+    (["and"], "logicalAnd", "left"),
     (["|"], "bitwiseOr", "left"),
     (["&"], "bitwiseAnd", "left"),
     (["==", "!=", "===", "!=="], "equality", "left"),
@@ -2723,8 +2726,8 @@ class Antlr4Transformer:
             ("nullCoalescingExpression", "nullCoalescing"),
             ("impliesExpression", "implies"),
             ("orExpression", "logicalOr"),
-            ("andExpression", "logicalAnd"),
             ("xorExpression", "xor"),
+            ("andExpression", "logicalAnd"),
             ("equalityExpression", "equality"),
             ("classificationExpression", None),  # special: optional suffix
             ("relationalExpression", "relational"),
