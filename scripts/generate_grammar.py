@@ -2255,9 +2255,96 @@ class Antlr4Transformer:
                 "alternative list, breaking qualified-name references inside "
                 "definition contexts (e.g. `subject SystemGateway::System_Driver;`). "
                 "Restoring it adds a `qualifiedIdentification` rule and adds it as "
-                "an alternative to `identification`.",
-                "rules": "identification, qualifiedIdentification",
-                "applied": grammar != prev,
+                 "an alternative to `identification`.",
+                 "rules": "identification, qualifiedIdentification",
+                 "applied": grammar != prev,
+             }
+        )
+
+        # Fix 50c: classificationExpression must accept all six postfix
+        # classification/metaclassification operators. Per the OMG XText
+        # grammar (ClassificationExpression) and the KEBNF
+        # (ClassificationExpression + MetaclassificationExpression),
+        # the postfix operators 'istype', 'hastype', '@', 'as', '@@' and
+        # 'meta' all sit at this precedence level, e.g. the standard
+        # library's `:>> baseType = situations meta SysML::Usage;`
+        # (CauseAndEffect.sysml, ParametersOfInterestMetadata.sysml,
+        # RequirementDerivation.sysml, Semantic Metadata Example.sysml).
+        # The fix is implemented in _generate_expression_rules(); this
+        # patch verifies it is present and repairs older emitters.
+        if "classificationExpression\n    : relationalExpression (\n        ISTYPE typeReference\n      | HASTYPE typeReference\n      | AS typeReference\n      )?\n    ;" in grammar:
+            grammar = grammar.replace(
+                "classificationExpression\n"
+                "    : relationalExpression (\n"
+                "        ISTYPE typeReference\n"
+                "      | HASTYPE typeReference\n"
+                "      | AS typeReference\n"
+                "      )?\n"
+                "    ;",
+                "classificationExpression\n"
+                "    : relationalExpression (\n"
+                "        ISTYPE typeReference\n"
+                "      | HASTYPE typeReference\n"
+                "      | AT_SIGN typeReference\n"
+                "      | AS typeReference\n"
+                "      | AT_AT typeReference\n"
+                "      | META typeReference\n"
+                "      )?\n"
+                "    ;",
+            )
+        self.applied_patches.append(
+            {
+                "id": "50c",
+                "category": "Conformance fix",
+                "summary": "Add '@', '@@' and 'meta' postfix operators to "
+                "`classificationExpression`",
+                "description": "The OMG grammar allows six postfix operators at the "
+                "classification precedence level: 'istype', 'hastype' and '@' "
+                "(classification test), 'as' (cast), '@@' (metaclassification "
+                "test) and 'meta' (meta cast). The generator emitted only "
+                "'istype', 'hastype' and 'as', so postfix 'meta' expressions "
+                "like `:>> baseType = situations meta SysML::Usage;` (used in "
+                "the OMG standard library and training suite) failed to parse "
+                "with `mismatched input 'meta'`. The fix is implemented "
+                "directly in _generate_expression_rules(); this patch entry "
+                "verifies the rule is present in the output and repairs "
+                "grammars from older emitters.",
+                "rules": "classificationExpression",
+                "applied": "META typeReference" in grammar
+                and "AT_AT typeReference" in grammar,
+            }
+        )
+
+        # Fix 50d: Add the ExtentExpression 'all' Type prefix form to
+        # unaryExpression. The OMG XText grammar layers ExtentExpression
+        # between UnaryExpression and PrimaryExpression:
+        #   UnaryExpression -> ('+'|'-'|'~'|'not') ExtentExpression
+        #                     | ExtentExpression
+        #   ExtentExpression -> 'all' Type | PrimaryExpression
+        # Without it, `subject : Engine[1..*] = all engineChoice;` (OMG
+        # validation model 10b-Trade-off Among Alternative
+        # Configurations.sysml) fails with "extraneous input 'all'".
+        # The fix is implemented in _generate_expression_rules(); this
+        # patch entry verifies the rule is present in the output.
+        self.applied_patches.append(
+            {
+                "id": "50d",
+                "category": "Conformance fix",
+                "summary": "Add ExtentExpression 'all' Type prefix form to "
+                "`unaryExpression`",
+                "description": "The OMG grammar's ExtentExpression "
+                "(`'all' Type`) was missing from the expression cascade "
+                "entirely, so extent expressions like "
+                "`subject : Engine[1..*] = all engineChoice;` in the OMG "
+                "validation models failed to parse with \"extraneous input "
+                "'all'\". The fix adds an `ALL typeReference` alternative "
+                "to `unaryExpression`, layered between the unary prefix "
+                "operators and `primaryExpression` exactly as in the OMG "
+                "XText grammar. Implemented directly in "
+                "_generate_expression_rules(); this patch entry verifies "
+                "the rule is present in the output.",
+                "rules": "unaryExpression",
+                "applied": "ALL typeReference" in grammar,
             }
         )
 
@@ -2751,13 +2838,25 @@ class Antlr4Transformer:
             lines.append("")
 
         # classificationExpression: single optional suffix operator
-        # (istype/hastype/cast as). Slightly different shape from the
-        # binary-operator levels above.
+        # (classification test / cast / metaclassification operators).
+        # Per the OMG XText grammar (ClassificationExpression rule) and the
+        # KEBNF (ClassificationExpression + MetaclassificationExpression),
+        # all six postfix operators sit at this level:
+        #   istype | hastype | '@'   (classification test)
+        #   as                     (cast)
+        #   '@@'                   (metaclassification test)
+        #   meta                   (meta cast)
+        # e.g. `:>> baseType = situations meta SysML::Usage;` in the
+        # standard library (CauseAndEffect.sysml, ParametersOfInterest
+        # Metadata.sysml, RequirementDerivation.sysml).
         lines.append("classificationExpression")
         lines.append("    : relationalExpression (")
         lines.append("        ISTYPE typeReference")
         lines.append("      | HASTYPE typeReference")
+        lines.append("      | AT_SIGN typeReference")
         lines.append("      | AS typeReference")
+        lines.append("      | AT_AT typeReference")
+        lines.append("      | META typeReference")
         lines.append("      )?")
         lines.append("    ;")
         lines.append("")
@@ -2766,10 +2865,13 @@ class Antlr4Transformer:
         # keyword 'all'. The OMG XText grammar splits these into two
         # separate levels (UnaryExpression and ExtentExpression) but
         # for ANTLR4 we can keep them in a single rule because their
-        # relative precedence is fixed.
+        # relative precedence is fixed: ExtentExpression 'all' Type sits
+        # directly below the unary operators and directly above
+        # PrimaryExpression ('- all T' parses, 'all -T' does not).
         lines.append("unaryExpression")
         lines.append("    : ( PLUS | MINUS | TILDE | NOT ) unaryExpression")
         lines.append("    | ( AT_SIGN | AT_AT ) typeReference")
+        lines.append("    | ALL typeReference")
         lines.append("    | primaryExpression")
         lines.append("    ;")
         lines.append("")

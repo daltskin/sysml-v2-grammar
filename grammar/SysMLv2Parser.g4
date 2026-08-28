@@ -72,13 +72,17 @@ classificationExpression
     : relationalExpression (
         ISTYPE typeReference
       | HASTYPE typeReference
+      | AT_SIGN typeReference
       | AS typeReference
+      | AT_AT typeReference
+      | META typeReference
       )?
     ;
 
 unaryExpression
     : ( PLUS | MINUS | TILDE | NOT ) unaryExpression
     | ( AT_SIGN | AT_AT ) typeReference
+    | ALL typeReference
     | primaryExpression
     ;
 

@@ -5,8 +5,8 @@ OMG SysML v2 KEBNF specification when translated to ANTLR4.
 
 - **Grammar version**: `2026.05.0`
 - **OMG release**: `2026-05`
-- **Total patches**: 56
-- **Applied**: 55
+- **Total patches**: 58
+- **Applied**: 57
 - **Skipped**: 1
 
 ## Spec BNF fix
@@ -339,6 +339,8 @@ The Go ANTLR runtime generates exported methods from rule names. Rules named `em
 | 48 | Allow prefix metadata annotations on enumeration value members | enumerationUsageMember | Yes |
 | 49 | Allow `REF` in body parameter declarations for `{in ref ...}` blocks | feature | Yes |
 | 50b | Restore `qualifiedIdentification` alternative in `identification` | identification, qualifiedIdentification | Yes |
+| 50c | Add '@', '@@' and 'meta' postfix operators to `classificationExpression` | classificationExpression | Yes |
+| 50d | Add ExtentExpression 'all' Type prefix form to `unaryExpression` | unaryExpression | Yes |
 | 50a | Allow trailing `ownedMultiplicity` in `connectorEnd` | connectorEnd | Yes |
 | 50 | Allow `REGULAR_COMMENT` as a no-op expression in `baseExpression` | baseExpression | Yes |
 | 51 | Allow `definitionBodyItem` in `functionBodyPart` for body expressions | functionBodyPart | Yes |
@@ -408,6 +410,18 @@ TradeStudies, 7b-Variant Configurations, and 15_05-Unification use `->forAll {in
 The OMG grammar allows `identification` to be a qualified name with one or more `::` segments. The daltskin generator removed the explicit `qualifiedIdentification` rule from the alternative list, breaking qualified-name references inside definition contexts (e.g. `subject SystemGateway::System_Driver;`). Restoring it adds a `qualifiedIdentification` rule and adds it as an alternative to `identification`.
 
 **Affected rules**: identification, qualifiedIdentification
+
+### Fix 50c: Add '@', '@@' and 'meta' postfix operators to `classificationExpression`
+
+The OMG grammar allows six postfix operators at the classification precedence level: 'istype', 'hastype' and '@' (classification test), 'as' (cast), '@@' (metaclassification test) and 'meta' (meta cast). The generator emitted only 'istype', 'hastype' and 'as', so postfix 'meta' expressions like `:>> baseType = situations meta SysML::Usage;` (used in the OMG standard library and training suite) failed to parse with `mismatched input 'meta'`. The fix is implemented directly in _generate_expression_rules(); this patch entry verifies the rule is present in the output and repairs grammars from older emitters.
+
+**Affected rules**: classificationExpression
+
+### Fix 50d: Add ExtentExpression 'all' Type prefix form to `unaryExpression`
+
+The OMG grammar's ExtentExpression (`'all' Type`) was missing from the expression cascade entirely, so extent expressions like `subject : Engine[1..*] = all engineChoice;` in the OMG validation models failed to parse with "extraneous input 'all'". The fix adds an `ALL typeReference` alternative to `unaryExpression`, layered between the unary prefix operators and `primaryExpression` exactly as in the OMG XText grammar. Implemented directly in _generate_expression_rules(); this patch entry verifies the rule is present in the output.
+
+**Affected rules**: unaryExpression
 
 ### Fix 50a: Allow trailing `ownedMultiplicity` in `connectorEnd`
 
