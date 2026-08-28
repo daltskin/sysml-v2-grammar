@@ -5,8 +5,8 @@ OMG SysML v2 KEBNF specification when translated to ANTLR4.
 
 - **Grammar version**: `2026.05.0`
 - **OMG release**: `2026-05`
-- **Total patches**: 54
-- **Applied**: 53
+- **Total patches**: 56
+- **Applied**: 55
 - **Skipped**: 1
 
 ## Spec BNF fix
@@ -338,6 +338,8 @@ The Go ANTLR runtime generates exported methods from rule names. Rules named `em
 | 47 | Allow `send` without inline payload/receiver in `sendNode` | sendNode | Yes |
 | 48 | Allow prefix metadata annotations on enumeration value members | enumerationUsageMember | Yes |
 | 49 | Allow `REF` in body parameter declarations for `{in ref ...}` blocks | feature | Yes |
+| 50b | Restore `qualifiedIdentification` alternative in `identification` | identification, qualifiedIdentification | Yes |
+| 50a | Allow trailing `ownedMultiplicity` in `connectorEnd` | connectorEnd | Yes |
 | 50 | Allow `REGULAR_COMMENT` as a no-op expression in `baseExpression` | baseExpression | Yes |
 | 51 | Allow `definitionBodyItem` in `functionBodyPart` for body expressions | functionBodyPart | Yes |
 
@@ -400,6 +402,18 @@ MetadataTest.sysml uses `#Security enum secret : ClassificationLevel = 2;` insid
 TradeStudies, 7b-Variant Configurations, and 15_05-Unification use `->forAll {in ref w; ...}` and `->selectOne {in ref a { ... } ...}`. The `feature` rule uses `basicFeaturePrefix featureDeclaration` but `basicFeaturePrefix` has no `REF` keyword. Added optional `( REF )?` between `basicFeaturePrefix` and `featureDeclaration`.
 
 **Affected rules**: feature
+
+### Fix 50b: Restore `qualifiedIdentification` alternative in `identification`
+
+The OMG grammar allows `identification` to be a qualified name with one or more `::` segments. The daltskin generator removed the explicit `qualifiedIdentification` rule from the alternative list, breaking qualified-name references inside definition contexts (e.g. `subject SystemGateway::System_Driver;`). Restoring it adds a `qualifiedIdentification` rule and adds it as an alternative to `identification`.
+
+**Affected rules**: identification, qualifiedIdentification
+
+### Fix 50a: Allow trailing `ownedMultiplicity` in `connectorEnd`
+
+The OMG ConnectorEnd allows multiplicity AFTER the reference subsetting (e.g. `connect x[1] to y;`). The daltskin generator emits only the before-name `ownedCrossMultiplicityMember` form. Without this patch, real SysML models using the after-name form fail to parse. The fix adds `ownedMultiplicity?` after the `ownedReferenceSubsetting`.
+
+**Affected rules**: connectorEnd
 
 ### Fix 50: Allow `REGULAR_COMMENT` as a no-op expression in `baseExpression`
 
