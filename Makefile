@@ -61,8 +61,9 @@ test: $(ANTLR_JAR) ## Validate grammar, parse examples, run conformance
 	@cd $(BUILD_DIR)/antlr-test/grammar && PASS=0; FAIL=0; \
 	for f in $(CURDIR)/examples/*.sysml; do \
 		printf "  Parsing $$(basename $$f)... "; \
-		if java -cp "$(CURDIR)/$(ANTLR_JAR):." org.antlr.v4.gui.TestRig SysMLv2Parser rootNamespace "$$f" 2>&1 | grep -qi "error"; then \
-			echo "❌ FAIL"; FAIL=$$((FAIL + 1)); \
+		ERR=$$(java -cp "$(CURDIR)/$(ANTLR_JAR):." org.antlr.v4.gui.TestRig SysMLv2 rootNamespace "$$f" 2>&1 >/dev/null); \
+		if [ -n "$$ERR" ]; then \
+			echo "❌ FAIL"; echo "$$ERR" | head -1 | sed 's/^/	    /'; FAIL=$$((FAIL + 1)); \
 		else \
 			echo "✅ PASS"; PASS=$$((PASS + 1)); \
 		fi; \
