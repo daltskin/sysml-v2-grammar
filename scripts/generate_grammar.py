@@ -891,19 +891,18 @@ class Antlr4Transformer:
             rules="libraryPackage",
         )
 
-        # Fix 5: importRule has visibilityIndicator as required, but it should
-        # be optional.
-        patch(
-            "5",
-            "Spec BNF fix",
-            "Make `visibilityIndicator` optional in `importRule`",
-            "The KEBNF uses `visibility = VisibilityIndicator` without an explicit `( )?` wrapper, "
-            "unlike `memberPrefix` which uses `( visibility = VisibilityIndicator )?`. "
-            "In practice, `import Foo::*;` is valid without a visibility prefix.",
-            "importRule\n    : visibilityIndicator IMPORT",
-            "importRule\n    : ( visibilityIndicator )? IMPORT",
-            rules="importRule",
-        )
+        # Fix 5 (REMOVED): this patch made `visibilityIndicator` optional
+        # in `importRule`, but it contradicted the normative grammar.
+        # Both the KEBNF and the OMG XText reference implementation
+        # (KerML.xtext and SysML.xtext, ImportPrefix fragment) REQUIRE an
+        # explicit visibility keyword on every import:
+        #     ImportPrefix: visibility = VisibilityIndicator 'import' ...
+        # (compare MemberPrefix, which wraps it in `( )?`). Every one of
+        # the 310 official conformance files and the entire standard
+        # library uses an explicit `private`/`public`/`protected` prefix
+        # -- zero bare imports. Removing the patch restores the natural
+        # KEBNF emission `importRule : visibilityIndicator IMPORT ...`
+        # so `import Foo::*;` without visibility is a syntax error.
 
         # Fix 6: allocationDefinition is defined as a rule but not included in
         # definitionElement.

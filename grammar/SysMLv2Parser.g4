@@ -315,7 +315,7 @@ qualifiedIdentification
     ;
 
 importRule
-    : ( visibilityIndicator )? IMPORT ( ALL )? importDeclaration relationshipBody
+    : visibilityIndicator IMPORT ( ALL )? importDeclaration relationshipBody
     ;
 
 importDeclaration

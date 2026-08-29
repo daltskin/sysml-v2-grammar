@@ -5,8 +5,8 @@ OMG SysML v2 KEBNF specification when translated to ANTLR4.
 
 - **Grammar version**: `2026.05.0`
 - **OMG release**: `2026-05`
-- **Total patches**: 58
-- **Applied**: 57
+- **Total patches**: 57
+- **Applied**: 56
 - **Skipped**: 1
 
 ## Spec BNF fix
@@ -17,7 +17,6 @@ OMG SysML v2 KEBNF specification when translated to ANTLR4.
 | 2 | Double-THEN in `defaultTargetSuccession` (reserved) | defaultTargetSuccession | No |
 | 3 | Make `NOT` optional in `satisfyRequirementUsage` | satisfyRequirementUsage | Yes |
 | 4 | Make `STANDARD` optional in `libraryPackage` | libraryPackage | Yes |
-| 5 | Make `visibilityIndicator` optional in `importRule` | importRule | Yes |
 | 6 | Add `allocationDefinition` to `definitionElement` | definitionElement | Yes |
 | 7 | Make `ASSERT` optional before `SATISFY` | satisfyRequirementUsage | Yes |
 | 8 | Add `ACTION` keyword support to `sendNode` | sendNode | Yes |
@@ -46,12 +45,6 @@ The KEBNF uses `isNegated ?= 'not'` without explicit `?`, but the `?=` boolean a
 Same `?=` boolean assignment issue as Fix 3.
 
 **Affected rules**: libraryPackage
-
-### Fix 5: Make `visibilityIndicator` optional in `importRule`
-
-The KEBNF uses `visibility = VisibilityIndicator` without an explicit `( )?` wrapper, unlike `memberPrefix` which uses `( visibility = VisibilityIndicator )?`. In practice, `import Foo::*;` is valid without a visibility prefix.
-
-**Affected rules**: importRule
 
 ### Fix 6: Add `allocationDefinition` to `definitionElement`
 
