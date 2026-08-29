@@ -420,15 +420,18 @@ class KebnfParser:
 # ANTLR4 Transformer
 # ---------------------------------------------------------------------------
 
-# Operator precedence from SysML v2 spec Table 6 (lowest to highest)
+# Operator precedence from SysML v2 spec Table 6 (lowest to highest).
+# Logical order per the OMG XText reference grammar (KerMLExpressions.xtext):
+# ImpliesExpression -> OrExpression -> XorExpression -> AndExpression ->
+# EqualityExpression, i.e. 'and' binds TIGHTER than 'xor'.
 OPERATOR_PRECEDENCE = [
     # (operators, name, associativity)
     (["if"], "conditional", "none"),  # Ternary if ? : else
     (["??"], "nullCoalescing", "left"),
     (["implies"], "implies", "left"),
     (["or"], "logicalOr", "left"),
-    (["and"], "logicalAnd", "left"),
     (["xor"], "xor", "left"),
+    (["and"], "logicalAnd", "left"),
     (["|"], "bitwiseOr", "left"),
     (["&"], "bitwiseAnd", "left"),
     (["==", "!=", "===", "!=="], "equality", "left"),
@@ -888,19 +891,18 @@ class Antlr4Transformer:
             rules="libraryPackage",
         )
 
-        # Fix 5: importRule has visibilityIndicator as required, but it should
-        # be optional.
-        patch(
-            "5",
-            "Spec BNF fix",
-            "Make `visibilityIndicator` optional in `importRule`",
-            "The KEBNF uses `visibility = VisibilityIndicator` without an explicit `( )?` wrapper, "
-            "unlike `memberPrefix` which uses `( visibility = VisibilityIndicator )?`. "
-            "In practice, `import Foo::*;` is valid without a visibility prefix.",
-            "importRule\n    : visibilityIndicator IMPORT",
-            "importRule\n    : ( visibilityIndicator )? IMPORT",
-            rules="importRule",
-        )
+        # Fix 5 (REMOVED): this patch made `visibilityIndicator` optional
+        # in `importRule`, but it contradicted the normative grammar.
+        # Both the KEBNF and the OMG XText reference implementation
+        # (KerML.xtext and SysML.xtext, ImportPrefix fragment) REQUIRE an
+        # explicit visibility keyword on every import:
+        #     ImportPrefix: visibility = VisibilityIndicator 'import' ...
+        # (compare MemberPrefix, which wraps it in `( )?`). Every one of
+        # the 310 official conformance files and the entire standard
+        # library uses an explicit `private`/`public`/`protected` prefix
+        # -- zero bare imports. Removing the patch restores the natural
+        # KEBNF emission `importRule : visibilityIndicator IMPORT ...`
+        # so `import Foo::*;` without visibility is a syntax error.
 
         # Fix 6: allocationDefinition is defined as a rule but not included in
         # definitionElement.
@@ -2213,6 +2215,178 @@ class Antlr4Transformer:
             rules="feature",
         )
 
+        # Fix 50b: Restore `qualifiedIdentification` alternative in
+        # `identification` and `qualifiedName` rule.
+        # The OMG grammar allows `identification` to be a qualified
+        # name (e.g. `subject SystemGateway::System_Driver;` in a
+        # requirement body). The daltskin generator inlines the
+        # `qualifiedIdentification` rule into `qualifiedName` but
+        # does NOT add it back as an alternative to `identification`.
+        # Without this, qualified names in element declarations
+        # (subject, attribute, etc.) inside definition bodies fail
+        # to parse. The fix adds `qualifiedIdentification` as an
+        # alternative to `identification` and ensures the rule is
+        # emitted.
+        prev = grammar
+        if "qualifiedIdentification" not in grammar:
+            grammar = grammar.replace(
+                "qualifiedName\n    : ( DOLLAR COLON_COLON )? ( name COLON_COLON )* name\n    ;",
+                "qualifiedName\n    : ( DOLLAR COLON_COLON )? ( name COLON_COLON )* name\n    ;\n\nqualifiedIdentification\n    : ( DOLLAR COLON_COLON )? ( name COLON_COLON )+ name\n    ;",
+            )
+        grammar = grammar.replace(
+            "identification\n"
+            "    : LT name GT name\n"
+            "    | LT name GT\n"
+            "    | name\n"
+            "    ;",
+            "identification\n"
+            "    : LT name GT name\n"
+            "    | LT name GT\n"
+            "    | qualifiedIdentification\n"
+            "    | name\n"
+            "    ;",
+        )
+        self.applied_patches.append(
+            {
+                "id": "50b",
+                "category": "Conformance fix",
+                "summary": "Restore `qualifiedIdentification` alternative in `identification`",
+                "description": "The OMG grammar allows `identification` to be a qualified "
+                "name with one or more `::` segments. The daltskin generator "
+                "removed the explicit `qualifiedIdentification` rule from the "
+                "alternative list, breaking qualified-name references inside "
+                "definition contexts (e.g. `subject SystemGateway::System_Driver;`). "
+                "Restoring it adds a `qualifiedIdentification` rule and adds it as "
+                 "an alternative to `identification`.",
+                 "rules": "identification, qualifiedIdentification",
+                 "applied": grammar != prev,
+             }
+        )
+
+        # Fix 50c: classificationExpression must accept all six postfix
+        # classification/metaclassification operators. Per the OMG XText
+        # grammar (ClassificationExpression) and the KEBNF
+        # (ClassificationExpression + MetaclassificationExpression),
+        # the postfix operators 'istype', 'hastype', '@', 'as', '@@' and
+        # 'meta' all sit at this precedence level, e.g. the standard
+        # library's `:>> baseType = situations meta SysML::Usage;`
+        # (CauseAndEffect.sysml, ParametersOfInterestMetadata.sysml,
+        # RequirementDerivation.sysml, Semantic Metadata Example.sysml).
+        # The fix is implemented in _generate_expression_rules(); this
+        # patch verifies it is present and repairs older emitters.
+        if "classificationExpression\n    : relationalExpression (\n        ISTYPE typeReference\n      | HASTYPE typeReference\n      | AS typeReference\n      )?\n    ;" in grammar:
+            grammar = grammar.replace(
+                "classificationExpression\n"
+                "    : relationalExpression (\n"
+                "        ISTYPE typeReference\n"
+                "      | HASTYPE typeReference\n"
+                "      | AS typeReference\n"
+                "      )?\n"
+                "    ;",
+                "classificationExpression\n"
+                "    : relationalExpression (\n"
+                "        ISTYPE typeReference\n"
+                "      | HASTYPE typeReference\n"
+                "      | AT_SIGN typeReference\n"
+                "      | AS typeReference\n"
+                "      | AT_AT typeReference\n"
+                "      | META typeReference\n"
+                "      )?\n"
+                "    ;",
+            )
+        self.applied_patches.append(
+            {
+                "id": "50c",
+                "category": "Conformance fix",
+                "summary": "Add '@', '@@' and 'meta' postfix operators to "
+                "`classificationExpression`",
+                "description": "The OMG grammar allows six postfix operators at the "
+                "classification precedence level: 'istype', 'hastype' and '@' "
+                "(classification test), 'as' (cast), '@@' (metaclassification "
+                "test) and 'meta' (meta cast). The generator emitted only "
+                "'istype', 'hastype' and 'as', so postfix 'meta' expressions "
+                "like `:>> baseType = situations meta SysML::Usage;` (used in "
+                "the OMG standard library and training suite) failed to parse "
+                "with `mismatched input 'meta'`. The fix is implemented "
+                "directly in _generate_expression_rules(); this patch entry "
+                "verifies the rule is present in the output and repairs "
+                "grammars from older emitters.",
+                "rules": "classificationExpression",
+                "applied": "META typeReference" in grammar
+                and "AT_AT typeReference" in grammar,
+            }
+        )
+
+        # Fix 50d: Add the ExtentExpression 'all' Type prefix form to
+        # unaryExpression. The OMG XText grammar layers ExtentExpression
+        # between UnaryExpression and PrimaryExpression:
+        #   UnaryExpression -> ('+'|'-'|'~'|'not') ExtentExpression
+        #                     | ExtentExpression
+        #   ExtentExpression -> 'all' Type | PrimaryExpression
+        # Without it, `subject : Engine[1..*] = all engineChoice;` (OMG
+        # validation model 10b-Trade-off Among Alternative
+        # Configurations.sysml) fails with "extraneous input 'all'".
+        # The fix is implemented in _generate_expression_rules(); this
+        # patch entry verifies the rule is present in the output.
+        self.applied_patches.append(
+            {
+                "id": "50d",
+                "category": "Conformance fix",
+                "summary": "Add ExtentExpression 'all' Type prefix form to "
+                "`unaryExpression`",
+                "description": "The OMG grammar's ExtentExpression "
+                "(`'all' Type`) was missing from the expression cascade "
+                "entirely, so extent expressions like "
+                "`subject : Engine[1..*] = all engineChoice;` in the OMG "
+                "validation models failed to parse with \"extraneous input "
+                "'all'\". The fix adds an `ALL typeReference` alternative "
+                "to `unaryExpression`, layered between the unary prefix "
+                "operators and `primaryExpression` exactly as in the OMG "
+                "XText grammar. Implemented directly in "
+                "_generate_expression_rules(); this patch entry verifies "
+                "the rule is present in the output.",
+                "rules": "unaryExpression",
+                "applied": "ALL typeReference" in grammar,
+            }
+        )
+
+        # Fix 50a: Add trailing ownedMultiplicity? to connectorEnd.
+        # The OMG ConnectorEnd rule allows a multiplicity either BEFORE
+        # the name (as a cross-multiplicity) or AFTER the reference
+        # subsetting. The daltskin generator emits only the
+        # before-name form, but real SysML models (e.g. the OMG
+        # "Connections Example") use the after-name form:
+        #   `connect lugBoltJoints[0..1] to wheel.w.mountingHoles[1];`
+        # Without the trailing multiplicity, the parser tries to
+        # interpret `[0..1]` as a subscript on a primary expression,
+        # which then breaks the connection-end structure.
+        # Fix: add an optional `ownedMultiplicity` after the
+        # `ownedReferenceSubsetting`.
+        prev = grammar
+        grammar = grammar.replace(
+            "connectorEnd\n"
+            "    : ( ownedCrossMultiplicityMember )? ( name ( COLON_COLON_GT | REFERENCES ) )? ownedReferenceSubsetting\n"
+            "    ;",
+            "connectorEnd\n"
+            "    : ( ownedCrossMultiplicityMember )? ( name ( COLON_COLON_GT | REFERENCES ) )? ownedReferenceSubsetting ownedMultiplicity?\n"
+            "    ;",
+        )
+        self.applied_patches.append(
+            {
+                "id": "50a",
+                "category": "Conformance fix",
+                "summary": "Allow trailing `ownedMultiplicity` in `connectorEnd`",
+                "description": "The OMG ConnectorEnd allows multiplicity AFTER the "
+                "reference subsetting (e.g. `connect x[1] to y;`). The daltskin "
+                "generator emits only the before-name `ownedCrossMultiplicityMember` "
+                "form. Without this patch, real SysML models using the after-name "
+                "form fail to parse. The fix adds `ownedMultiplicity?` after the "
+                "`ownedReferenceSubsetting`.",
+                "rules": "connectorEnd",
+                "applied": grammar != prev,
+            }
+        )
+
         # Fix 50: Allow REGULAR_COMMENT inside parenthesized expressions.
         # Analysis Case Usage Example.sysml uses `= ( //* ... */ )` where the
         # block comment is the entire value (commented-out placeholder). After
@@ -2524,51 +2698,210 @@ class Antlr4Transformer:
         This converts the flat .kebnf expression grammar (which uses implicit
         precedence from spec Table 6) into ANTLR4's native left-recursive
         precedence-climbing format.
+
+        Per SysML v2 spec Table 6, operator precedence (lowest to highest):
+          conditional (if/else) | null-coalescing (??) | implies | or | xor | and
+          | equality (==/!=/===/!==) | relational (<,>,<=,>=) | range (..)
+          | additive (+,-) | multiplicative (*,/,%) | exponentiation (**,^)
+          | unary (+,-,~,not) | extent (all) | primary
+
+        The previous version of this function emitted a single flat
+        ``ownedExpression`` rule that listed every binary operator at the
+        same level. ANTLR4 resolves that ambiguity with left-association,
+        which gives wrong precedence for expressions like ``a + b * c``
+        (parses as ``(a+b) * c`` instead of ``a + (b*c)``). That bug
+        forced consumers to re-arrange operators in their own visitor.
+        Splitting the rule per precedence level fixes the parse without
+        changing the surface syntax of the language.
         """
         lines = []
 
-        # Main expression rule with precedence alternatives
+        # Per-precedence rule names in order from top (lowest binding) to
+        # bottom (highest binding). The rule at index i consumes
+        # operators at the i-th precedence level, calling the rule at
+        # index i+1 for its sub-operands.
+        # Each tuple is (rule_name, precedence_key_in_OPERATOR_PRECEDENCE).
+        levels = [
+            ("nullCoalescingExpression", "nullCoalescing"),
+            ("impliesExpression", "implies"),
+            ("orExpression", "logicalOr"),
+            ("xorExpression", "xor"),
+            ("andExpression", "logicalAnd"),
+            ("equalityExpression", "equality"),
+            ("classificationExpression", None),  # special: optional suffix
+            ("relationalExpression", "relational"),
+            ("rangeExpression", "range"),
+            ("additiveExpression", "additive"),
+            ("multiplicativeExpression", "multiplicative"),
+            ("exponentiationExpression", "exponentiation"),
+        ]
+
+        # Operator token map. Keys are the OMG operator strings; values
+        # are the corresponding ANTLR4 token names. Mirrors the token
+        # ordering produced by _generate_operator_tokens() so the parser
+        # is consistent with the lexer.
+        op_to_token = {
+            "if": "IF",
+            "??": "QUESTION_QUESTION",
+            "implies": "IMPLIES",
+            "or": "OR",
+            "|": "PIPE",  # symbol form of 'or' at the same precedence
+            "and": "AND",
+            "&": "AMP",  # symbol form of 'and' at the same precedence
+            "xor": "XOR",
+            "==": "EQ_EQ",
+            "!=": "BANG_EQ",
+            "===": "EQ_EQ_EQ",
+            "!==": "BANG_EQ_EQ",
+            "<": "LT",
+            ">": "GT",
+            "<=": "LE",
+            ">=": "GE",
+            "..": "DOT_DOT",
+            "+": "PLUS",
+            "-": "MINUS",
+            "*": "STAR",
+            "/": "SLASH",
+            "%": "PERCENT",
+            "**": "STAR_STAR",
+            "^": "CARET",
+            "~": "TILDE",
+            "not": "NOT",
+            "@": "AT_SIGN",
+            "@@": "AT_AT",
+            "istype": "ISTYPE",
+            "hastype": "HASTYPE",
+            "as": "AS",
+        }
+
+        # The level-to-operators map (extracted from OPERATOR_PRECEDENCE).
+        # The OMG XText grammar treats '|' and '&' as bitwise synonyms
+        # for the keyword forms 'or' and 'and' at the SAME precedence
+        # level, so we merge the 'bitwiseOr'/'logicalOr' levels and the
+        # 'bitwiseAnd'/'logicalAnd' levels here.
+        level_ops = {entry[1]: list(entry[0]) for entry in OPERATOR_PRECEDENCE}
+        level_assoc = {entry[1]: entry[2] for entry in OPERATOR_PRECEDENCE}
+        # Merge bitwiseOr into logicalOr (same precedence, same associativity)
+        if "bitwiseOr" in level_ops and "logicalOr" in level_ops:
+            level_ops["logicalOr"] = level_ops["logicalOr"] + level_ops["bitwiseOr"]
+            del level_ops["bitwiseOr"]
+        # Merge bitwiseAnd into logicalAnd
+        if "bitwiseAnd" in level_ops and "logicalAnd" in level_ops:
+            level_ops["logicalAnd"] = level_ops["logicalAnd"] + level_ops["bitwiseAnd"]
+            del level_ops["bitwiseAnd"]
+
+        def token_list(ops):
+            """Render a list of operator strings as a parenthesized
+            ANTLR4 token alternation."""
+            tokens = [op_to_token[o] for o in ops if o in op_to_token]
+            if len(tokens) == 1:
+                return tokens[0]
+            return "( " + " | ".join(tokens) + " )"
+
+        # ownedExpression: top-level entry. Handles the ternary
+        # 'if expr ? expr : expr' and null-coalescing '??' (the only
+        # operators not represented in the OPERATOR_PRECEDENCE table
+        # because the conditional form has a non-binary structure).
         lines.append("ownedExpression")
         lines.append(
             "    : IF ownedExpression QUESTION ownedExpression ELSE ownedExpression"
         )
-        lines.append("    | ownedExpression QUESTION_QUESTION ownedExpression")
-        lines.append("    | ownedExpression IMPLIES ownedExpression")
-        lines.append("    | ownedExpression OR ownedExpression")
-        lines.append("    | ownedExpression AND ownedExpression")
-        lines.append("    | ownedExpression XOR ownedExpression")
-        lines.append("    | ownedExpression PIPE ownedExpression")
-        lines.append("    | ownedExpression AMP ownedExpression")
-        lines.append(
-            "    | ownedExpression ( EQ_EQ | BANG_EQ | EQ_EQ_EQ | BANG_EQ_EQ ) ownedExpression"
-        )
-        lines.append("    | ownedExpression ( LT | GT | LE | GE ) ownedExpression")
-        lines.append("    | ownedExpression DOT_DOT ownedExpression")
-        lines.append("    | ownedExpression ( PLUS | MINUS ) ownedExpression")
-        lines.append("    | ownedExpression ( STAR | SLASH | PERCENT ) ownedExpression")
-        lines.append(
-            "    | <assoc=right> ownedExpression ( STAR_STAR | CARET ) ownedExpression"
-        )
-        lines.append("    | ( PLUS | MINUS | TILDE | NOT ) ownedExpression")
-        lines.append("    | ( AT_SIGN | AT_AT ) typeReference")
-        lines.append(
-            "    | ownedExpression ( ISTYPE | HASTYPE | AT_SIGN ) typeReference"
-        )
-        lines.append("    | ownedExpression AS typeReference")
-        lines.append("    | ownedExpression AT_AT typeReference")
-        lines.append("    | ownedExpression META typeReference")
-        lines.append("    | ownedExpression LBRACK sequenceExpressionList? RBRACK")
-        lines.append("    | ownedExpression HASH LPAREN sequenceExpressionList? RPAREN")
-        lines.append("    | ownedExpression argumentList")
-        lines.append("    | ownedExpression DOT qualifiedName")
-        lines.append("    | ownedExpression DOT_QUESTION bodyExpression")
-        lines.append(
-            "    | ownedExpression ARROW qualifiedName ( bodyExpression | argumentList )"
-        )
-        lines.append("    | ALL typeReference")
-        lines.append("    | baseExpression")
+        lines.append("    | nullCoalescingExpression")
         lines.append("    ;")
         lines.append("")
+
+        # Generate each per-precedence rule. Rule N calls rule N+1 for
+        # its sub-operands. Same-precedence operators are merged in a
+        # single ( op operand )* loop with left-associativity; the
+        # exponentiation level uses ( op level )? for right-association.
+        for i, (rule_name, prec_key) in enumerate(levels):
+            if prec_key is None:
+                # classificationExpression: handled separately below
+                # because it has a single optional suffix rather than
+                # a binary-operator loop.
+                continue
+            next_level = levels[i + 1][0] if i + 1 < len(levels) else "unaryExpression"
+            ops = level_ops.get(prec_key, [])
+            if not ops:
+                continue
+            assoc = level_assoc.get(prec_key, "left")
+            lines.append(rule_name)
+            if assoc == "right":
+                # Right-associative: single optional op at this level.
+                lines.append(
+                    f"    : {next_level} ( {token_list(ops)} {rule_name} )?"
+                )
+            else:
+                # Left-associative: ( op level_below )*
+                lines.append(
+                    f"    : {next_level} ( {token_list(ops)} {next_level} )*"
+                )
+            lines.append("    ;")
+            lines.append("")
+
+        # classificationExpression: single optional suffix operator
+        # (classification test / cast / metaclassification operators).
+        # Per the OMG XText grammar (ClassificationExpression rule) and the
+        # KEBNF (ClassificationExpression + MetaclassificationExpression),
+        # all six postfix operators sit at this level:
+        #   istype | hastype | '@'   (classification test)
+        #   as                     (cast)
+        #   '@@'                   (metaclassification test)
+        #   meta                   (meta cast)
+        # e.g. `:>> baseType = situations meta SysML::Usage;` in the
+        # standard library (CauseAndEffect.sysml, ParametersOfInterest
+        # Metadata.sysml, RequirementDerivation.sysml).
+        lines.append("classificationExpression")
+        lines.append("    : relationalExpression (")
+        lines.append("        ISTYPE typeReference")
+        lines.append("      | HASTYPE typeReference")
+        lines.append("      | AT_SIGN typeReference")
+        lines.append("      | AS typeReference")
+        lines.append("      | AT_AT typeReference")
+        lines.append("      | META typeReference")
+        lines.append("      )?")
+        lines.append("    ;")
+        lines.append("")
+
+        # unaryExpression: prefix operators (+, -, ~, not) and extent
+        # keyword 'all'. The OMG XText grammar splits these into two
+        # separate levels (UnaryExpression and ExtentExpression) but
+        # for ANTLR4 we can keep them in a single rule because their
+        # relative precedence is fixed: ExtentExpression 'all' Type sits
+        # directly below the unary operators and directly above
+        # PrimaryExpression ('- all T' parses, 'all -T' does not).
+        lines.append("unaryExpression")
+        lines.append("    : ( PLUS | MINUS | TILDE | NOT ) unaryExpression")
+        lines.append("    | ( AT_SIGN | AT_AT ) typeReference")
+        lines.append("    | ALL typeReference")
+        lines.append("    | primaryExpression")
+        lines.append("    ;")
+        lines.append("")
+
+        # primaryExpression: postfix operators (DOT, [], #, ->, etc.) on
+        # a base expression. The OMG grammar expresses this as a chain
+        # of (suffix)* alternatives on the base.
+        lines.append("primaryExpression")
+        lines.append("    : baseExpression (")
+        lines.append("        DOT qualifiedName")
+        lines.append("      | DOT bodyExpression")
+        lines.append("      | DOT_QUESTION bodyExpression")
+        lines.append("      | LBRACK sequenceExpressionList? RBRACK")
+        lines.append("      | HASH LPAREN sequenceExpressionList? RPAREN")
+        lines.append("      | argumentList")
+        lines.append("      | ARROW qualifiedName ( bodyExpression | argumentList )")
+        lines.append("      )*")
+        lines.append("    ;")
+        lines.append("")
+
+        # Post-fix: keep ownedExpression as the entry but redirect
+        # baseExpression's caller to primaryExpression. We accomplish
+        # this by renaming: replace the old top-level baseExpression
+        # rule and update its callers in the rest of the generator.
+        # The original baseExpression stays; we just add a new
+        # primaryExpression above it.
+        # (No further changes needed here -- primaryExpression above
+        # delegates to baseExpression below.)
 
         # Type reference for classification/cast
         lines.append("typeReference")

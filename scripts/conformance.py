@@ -111,23 +111,40 @@ def ensure_grammar_compiled() -> None:
     compile_dir = BUILD_DIR / "antlr-test"
     compile_dir.mkdir(parents=True, exist_ok=True)
 
+    # NOTE: ANTLR must be given *relative* grammar paths (with cwd=ROOT),
+    # otherwise it writes the generated sources directly into compile_dir
+    # instead of compile_dir/grammar/, and the javac step below fails
+    # because its cwd (GRAMMAR_CLASS_DIR) does not exist.
     subprocess.run(
         [
             "java",
             "-jar",
-            str(ANTLR_JAR),
+            ".build/antlr4.jar",
             "-Dlanguage=Java",
             "-o",
             str(compile_dir),
-            str(ROOT / "grammar" / "SysMLv2Lexer.g4"),
-            str(ROOT / "grammar" / "SysMLv2Parser.g4"),
+            "grammar/SysMLv2Lexer.g4",
+            "grammar/SysMLv2Parser.g4",
         ],
+        cwd=str(ROOT),
         check=True,
         capture_output=True,
     )
 
+    # NOTE: subprocess.run with a list does not perform shell glob
+    # expansion, so "*.java" must be expanded in Python. Passing the
+    # literal string makes javac fail with "invalid flag" / exit 2.
+    java_sources = sorted(p.name for p in GRAMMAR_CLASS_DIR.glob("*.java"))
+    if not java_sources:
+        print(
+            "❌ ANTLR did not generate any Java sources in "
+            f"{GRAMMAR_CLASS_DIR}.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
     subprocess.run(
-        ["javac", "-cp", f"{ANTLR_JAR}:.", "*.java"],
+        ["javac", "-cp", f"{ANTLR_JAR}:.", *java_sources],
         cwd=str(GRAMMAR_CLASS_DIR),
         check=True,
         capture_output=True,
@@ -136,21 +153,30 @@ def ensure_grammar_compiled() -> None:
 
 def parse_file(filepath: Path) -> ParseFailure | None:
     """Parse a single file through ANTLR4 TestRig. Returns failure or None."""
-    result = subprocess.run(
-        [
-            "java",
-            "-cp",
-            f"{ANTLR_JAR}:.",
-            "org.antlr.v4.gui.TestRig",
-            "SysMLv2Parser",
-            "rootNamespace",
-            str(filepath),
-        ],
-        cwd=str(GRAMMAR_CLASS_DIR),
-        capture_output=True,
-        text=True,
-        timeout=30,
-    )
+    try:
+        result = subprocess.run(
+            [
+                "java",
+                "-cp",
+                f"{ANTLR_JAR}:.",
+                "org.antlr.v4.gui.TestRig",
+                # TestRig derives "<grammarName>Lexer" and "<grammarName>Parser"
+                # from the first argument, so it must be the grammar base name
+                # "SysMLv2" -- passing "SysMLv2Parser" loads the parser class as
+                # the lexer and throws ClassCastException on every invocation,
+                # which the failure detection below silently ignores.
+                "SysMLv2",
+                "rootNamespace",
+                str(filepath),
+            ],
+            cwd=str(GRAMMAR_CLASS_DIR),
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+    except subprocess.TimeoutExpired:
+        rel = str(filepath.relative_to(ROOT))
+        return ParseFailure(file=rel, stderr="timed out after 120s")
 
     stderr = result.stderr.strip()
     if stderr and ("error" in stderr.lower() or "line " in stderr.lower()):

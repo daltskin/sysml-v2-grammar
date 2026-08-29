@@ -21,33 +21,81 @@ options {
 
 ownedExpression
     : IF ownedExpression QUESTION ownedExpression ELSE ownedExpression
-    | ownedExpression QUESTION_QUESTION ownedExpression
-    | ownedExpression IMPLIES ownedExpression
-    | ownedExpression OR ownedExpression
-    | ownedExpression AND ownedExpression
-    | ownedExpression XOR ownedExpression
-    | ownedExpression PIPE ownedExpression
-    | ownedExpression AMP ownedExpression
-    | ownedExpression ( EQ_EQ | BANG_EQ | EQ_EQ_EQ | BANG_EQ_EQ ) ownedExpression
-    | ownedExpression ( LT | GT | LE | GE ) ownedExpression
-    | ownedExpression DOT_DOT ownedExpression
-    | ownedExpression ( PLUS | MINUS ) ownedExpression
-    | ownedExpression ( STAR | SLASH | PERCENT ) ownedExpression
-    | <assoc=right> ownedExpression ( STAR_STAR | CARET ) ownedExpression
-    | ( PLUS | MINUS | TILDE | NOT ) ownedExpression
+    | nullCoalescingExpression
+    ;
+
+nullCoalescingExpression
+    : impliesExpression ( QUESTION_QUESTION impliesExpression )*
+    ;
+
+impliesExpression
+    : orExpression ( IMPLIES orExpression )*
+    ;
+
+orExpression
+    : xorExpression ( ( OR | PIPE ) xorExpression )*
+    ;
+
+xorExpression
+    : andExpression ( XOR andExpression )*
+    ;
+
+andExpression
+    : equalityExpression ( ( AND | AMP ) equalityExpression )*
+    ;
+
+equalityExpression
+    : classificationExpression ( ( EQ_EQ | BANG_EQ | EQ_EQ_EQ | BANG_EQ_EQ ) classificationExpression )*
+    ;
+
+relationalExpression
+    : rangeExpression ( ( LT | GT | LE | GE ) rangeExpression )*
+    ;
+
+rangeExpression
+    : additiveExpression ( DOT_DOT additiveExpression )*
+    ;
+
+additiveExpression
+    : multiplicativeExpression ( ( PLUS | MINUS ) multiplicativeExpression )*
+    ;
+
+multiplicativeExpression
+    : exponentiationExpression ( ( STAR | SLASH | PERCENT ) exponentiationExpression )*
+    ;
+
+exponentiationExpression
+    : unaryExpression ( ( STAR_STAR | CARET ) exponentiationExpression )?
+    ;
+
+classificationExpression
+    : relationalExpression (
+        ISTYPE typeReference
+      | HASTYPE typeReference
+      | AT_SIGN typeReference
+      | AS typeReference
+      | AT_AT typeReference
+      | META typeReference
+      )?
+    ;
+
+unaryExpression
+    : ( PLUS | MINUS | TILDE | NOT ) unaryExpression
     | ( AT_SIGN | AT_AT ) typeReference
-    | ownedExpression ( ISTYPE | HASTYPE | AT_SIGN ) typeReference
-    | ownedExpression AS typeReference
-    | ownedExpression AT_AT typeReference
-    | ownedExpression META typeReference
-    | ownedExpression LBRACK sequenceExpressionList? RBRACK
-    | ownedExpression HASH LPAREN sequenceExpressionList? RPAREN
-    | ownedExpression argumentList
-    | ownedExpression DOT qualifiedName
-    | ownedExpression DOT_QUESTION bodyExpression
-    | ownedExpression ARROW qualifiedName ( bodyExpression | argumentList )
     | ALL typeReference
-    | baseExpression
+    | primaryExpression
+    ;
+
+primaryExpression
+    : baseExpression (
+        DOT qualifiedName
+      | DOT bodyExpression
+      | DOT_QUESTION bodyExpression
+      | LBRACK sequenceExpressionList? RBRACK
+      | HASH LPAREN sequenceExpressionList? RPAREN
+      | argumentList
+      | ARROW qualifiedName ( bodyExpression | argumentList )
+      )*
     ;
 
 typeReference
@@ -156,6 +204,7 @@ unreservedKeyword
 identification
     : LT name GT name
     | LT name GT
+    | qualifiedIdentification
     | name
     ;
 
@@ -261,8 +310,12 @@ qualifiedName
     : ( DOLLAR COLON_COLON )? ( name COLON_COLON )* name
     ;
 
+qualifiedIdentification
+    : ( DOLLAR COLON_COLON )? ( name COLON_COLON )+ name
+    ;
+
 importRule
-    : ( visibilityIndicator )? IMPORT ( ALL )? importDeclaration relationshipBody
+    : visibilityIndicator IMPORT ( ALL )? importDeclaration relationshipBody
     ;
 
 importDeclaration
@@ -667,7 +720,7 @@ connectorEndMember
     ;
 
 connectorEnd
-    : ( ownedCrossMultiplicityMember )? ( name ( COLON_COLON_GT | REFERENCES ) )? ownedReferenceSubsetting
+    : ( ownedCrossMultiplicityMember )? ( name ( COLON_COLON_GT | REFERENCES ) )? ownedReferenceSubsetting ownedMultiplicity?
     ;
 
 ownedCrossMultiplicityMember
