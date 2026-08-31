@@ -3,8 +3,8 @@
 Post-generation patches applied to the ANTLR4 grammar to fix known issues in the
 OMG SysML v2 KEBNF specification when translated to ANTLR4.
 
-- **Grammar version**: `2026.05.0`
-- **OMG release**: `2026-05`
+- **Grammar version**: `2026.07.0`
+- **OMG release**: `2026-07`
 - **Total patches**: 54
 - **Applied**: 53
 - **Skipped**: 1
