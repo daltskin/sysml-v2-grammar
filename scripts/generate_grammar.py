@@ -709,6 +709,7 @@ class Antlr4Transformer:
         # Rules defined by expression generator
         expr_defined = {
             "ownedExpression",
+            "primaryExpression",
             "typeReference",
             "sequenceExpressionList",
             "baseExpression",
@@ -2281,31 +2282,18 @@ class Antlr4Transformer:
             }
         )
 
-        # Fix 53: Add metadata cast expression to baseExpression.
-        # SysML v2 allows parenthesized cast syntax `(as MetadataType)` to cast
-        # a metadata annotation to a specific metadata definition type. This
-        # construct is not present in the OMG KEBNF grammar but is used in
-        # practice. The alternative must appear before the parenthesized
-        # sequence expression `LPAREN sequenceExpressionList? RPAREN` to avoid
-        # being consumed as a grouped expression.
-        prev = grammar
-        grammar = grammar.replace(
-            "    | LPAREN sequenceExpressionList? RPAREN\n    ;",
-            "    | LPAREN AS typeReference RPAREN   // metadata cast expression: (as MetadataType)\n"
-            "    | LPAREN sequenceExpressionList? RPAREN\n    ;",
-        )
+        # Fix 53 is intentionally skipped: the direct ``AS`` classification
+        # alternative already covers ``(as Type)`` without a duplicate base
+        # production or an exact ambiguity.
         self.applied_patches.append(
             {
                 "id": "53",
                 "category": "Extension",
                 "summary": "Add metadata cast expression `(as Type)` to `baseExpression`",
-                "description": "SysML v2 allows `(as MetadataType)` as a parenthesized cast "
-                "expression to narrow a metadata annotation to a specific metadata definition "
-                "type. Added `LPAREN AS typeReference RPAREN` as an alternative in "
-                "`baseExpression`, placed before the parenthesized sequence expression to "
-                "avoid ambiguity.",
+                "description": "Skipped because the direct ``AS`` classification alternative "
+                "covers the same parenthesized form without a duplicate base production.",
                 "rules": "baseExpression",
-                "applied": grammar != prev,
+                "applied": False,
             }
         )
 
@@ -2410,6 +2398,26 @@ class Antlr4Transformer:
             f"- **Skipped**: {sum(1 for p in self.applied_patches if not p['applied'])}",
             "",
         ]
+
+        lines.extend(
+            [
+                "## Expression scope ledger",
+                "",
+                "The expression changes are limited to the generated `ownedExpression` precedence order and the directly required primary boundaries. Each row has a distinguishing regression; restoring the corresponding hunk reproduces the listed failure.",
+                "Non-empty `functionBodyPart` ambiguity is inherited from the base grammar and remains a separate body follow-up; this patch covers only empty-body postfix boundaries and makes no claim about non-empty body acceptance.",
+                "",
+                "| Generated hunk | Official evidence | Distinguishing regression | Restore failure |",
+                "|---|---|---|---|",
+                "| `ownedExpression` tier order and final conditional alternative | [KEBNF operator productions](https://github.com/Systems-Modeling/SysML-v2-Release/blob/de1070ae8e79c21532b8004fc663d47b35d0e9fa/bnf/KerML-textual-bnf.kebnf#L932-L969); [OMG Table 6](https://www.omg.org/spec/KerML/1.0/PDF#page=124) | `a + b * c`; `a == b & c xor d | e implies f ?? g`; `if a ? b else c + d` | Base order groups lower-precedence operators inside higher-precedence operands and lets the trailing operator escape the `else` branch. |",
+                "| Right-associative exponentiation tier | [KEBNF associativity note](https://github.com/Systems-Modeling/SysML-v2-Release/blob/de1070ae8e79c21532b8004fc663d47b35d0e9fa/bnf/KerML-textual-bnf.kebnf#L1061-L1064) | `a * b ** c`; `a ** b * c`; `a ** b ** c`; `a ^ b ^ c` | Base emission places exponentiation below multiplication in the ANTLR alternative order, so adjacent-tier grouping is wrong; the explicit right-associative marker alone does not repair that precedence. |",
+                "| Classification/metaclassification and type-reference boundaries | [KEBNF classification productions](https://github.com/Systems-Modeling/SysML-v2-Release/blob/de1070ae8e79c21532b8004fc663d47b35d0e9fa/bnf/KerML-textual-bnf.kebnf#L979-L1037) | `a istype T + b`; `a istype T as U`; `a + b @@ T`; `a @@ T @@ U` | Restoring the boundary loses recursive raw-KEBNF forms or accepts the invalid chained metaclassification form. |",
+                "| `primaryExpression` postfix boundary | [KEBNF primary-expression productions](https://github.com/Systems-Modeling/SysML-v2-Release/blob/de1070ae8e79c21532b8004fc663d47b35d0e9fa/bnf/KerML-textual-bnf.kebnf#L1068-L1178); [official Pilot primary rules](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/blob/fa709f28dfd49dfdb7ee83e4e19da2f57e0eb3aa/org.omg.kerml.expressions.xtext/src/org/omg/kerml/expressions/xtext/KerMLExpressions.xtext#L300-L324) | `-a.f`; `not a.f`; `~a[1]`; `-a->F()`; `all T.f`; `istype T.f` | Restoring direct-left-recursive postfix alternatives changes the official grouping `-(a.f)` to `(-a).f`, and permits postfix continuation after `all` or classification operands. |",
+                "| Empty-parenthesized boundary | [KEBNF `NullExpression`](https://github.com/Systems-Modeling/SysML-v2-Release/blob/de1070ae8e79c21532b8004fc663d47b35d0e9fa/bnf/KerML-textual-bnf.kebnf#L1182-L1193) | `()` | The PR base reaches `()` through both `nullExpression` and optional `sequenceExpressionList`, producing one exact ambiguity; retaining one path preserves acceptance with zero ambiguity. |",
+                "| Skipped Fix 53 metadata-cast base alternative | [KEBNF classification production](https://github.com/Systems-Modeling/SysML-v2-Release/blob/de1070ae8e79c21532b8004fc663d47b35d0e9fa/bnf/KerML-textual-bnf.kebnf#L979-L985) | `(as T).isMandatory` | Restoring Fix 53 creates an exact ambiguity; the direct `AS` classification alternative accepts this form without the duplicate base production. |",
+                "| Sequence, invocation, and constructor primary boundaries | [KEBNF primary/base productions](https://github.com/Systems-Modeling/SysML-v2-Release/blob/de1070ae8e79c21532b8004fc663d47b35d0e9fa/bnf/KerML-textual-bnf.kebnf#L1068-L1233) | `a[1,]`; `a#(1,)`; `a.f.g()`; `new A.B()`; `a[]` | Base accepts empty sequence/index forms, does not preserve trailing commas, or rejects a qualified feature-chain invocation. |",
+                "",
+            ]
+        )
 
         # Group by category
         categories: Dict[str, List[Dict[str, str]]] = {}
@@ -2521,71 +2529,78 @@ class Antlr4Transformer:
     def _generate_expression_rules(self) -> List[str]:
         """Generate ANTLR4 expression rules with proper precedence.
 
-        This converts the flat .kebnf expression grammar (which uses implicit
-        precedence from spec Table 6) into ANTLR4's native left-recursive
-        precedence-climbing format.
+        The source KEBNF leaves precedence implicit. ANTLR direct-left-recursive
+        alternatives must therefore be emitted from high to low precedence,
+        with a right-recursive exponentiation tier and the conditional form
+        last so its ``else`` operand owns trailing operators.
         """
         lines = []
 
-        # Main expression rule with precedence alternatives
+        # ANTLR direct-left-recursive alternatives are emitted high-to-low.
         lines.append("ownedExpression")
-        lines.append(
-            "    : IF ownedExpression QUESTION ownedExpression ELSE ownedExpression"
-        )
-        lines.append("    | ownedExpression QUESTION_QUESTION ownedExpression")
-        lines.append("    | ownedExpression IMPLIES ownedExpression")
-        lines.append("    | ownedExpression OR ownedExpression")
-        lines.append("    | ownedExpression AND ownedExpression")
-        lines.append("    | ownedExpression XOR ownedExpression")
-        lines.append("    | ownedExpression PIPE ownedExpression")
-        lines.append("    | ownedExpression AMP ownedExpression")
-        lines.append(
-            "    | ownedExpression ( EQ_EQ | BANG_EQ | EQ_EQ_EQ | BANG_EQ_EQ ) ownedExpression"
-        )
-        lines.append("    | ownedExpression ( LT | GT | LE | GE ) ownedExpression")
-        lines.append("    | ownedExpression DOT_DOT ownedExpression")
-        lines.append("    | ownedExpression ( PLUS | MINUS ) ownedExpression")
-        lines.append("    | ownedExpression ( STAR | SLASH | PERCENT ) ownedExpression")
+        lines.append("    : ( ISTYPE | HASTYPE | AT_SIGN | AS ) typeReference")
+        lines.append("    | ALL typeReference")
+        lines.append("    | ( PLUS | MINUS | TILDE | NOT ) ownedExpression")
         lines.append(
             "    | <assoc=right> ownedExpression ( STAR_STAR | CARET ) ownedExpression"
         )
-        lines.append("    | ( PLUS | MINUS | TILDE | NOT ) ownedExpression")
-        lines.append("    | ( AT_SIGN | AT_AT ) typeReference")
+        lines.append("    | ownedExpression ( STAR | SLASH | PERCENT ) ownedExpression")
+        lines.append("    | ownedExpression ( PLUS | MINUS ) ownedExpression")
+        lines.append("    | ownedExpression DOT_DOT ownedExpression")
+        lines.append("    | ownedExpression ( LT | GT | LE | GE ) ownedExpression")
         lines.append(
             "    | ownedExpression ( ISTYPE | HASTYPE | AT_SIGN ) typeReference"
         )
         lines.append("    | ownedExpression AS typeReference")
-        lines.append("    | ownedExpression AT_AT typeReference")
-        lines.append("    | ownedExpression META typeReference")
-        lines.append("    | ownedExpression LBRACK sequenceExpressionList? RBRACK")
-        lines.append("    | ownedExpression HASH LPAREN sequenceExpressionList? RPAREN")
-        lines.append("    | ownedExpression argumentList")
-        lines.append("    | ownedExpression DOT qualifiedName")
-        lines.append("    | ownedExpression DOT_QUESTION bodyExpression")
         lines.append(
-            "    | ownedExpression ARROW qualifiedName ( bodyExpression | argumentList )"
+            "    | ownedExpression ( EQ_EQ | BANG_EQ | EQ_EQ_EQ | BANG_EQ_EQ ) ownedExpression"
         )
-        lines.append("    | ALL typeReference")
-        lines.append("    | baseExpression")
+        lines.append("    | ownedExpression ( AMP | AND ) ownedExpression")
+        lines.append("    | ownedExpression XOR ownedExpression")
+        lines.append("    | ownedExpression ( PIPE | OR ) ownedExpression")
+        lines.append("    | ownedExpression IMPLIES ownedExpression")
+        lines.append("    | ownedExpression QUESTION_QUESTION ownedExpression")
+        lines.append("    | primaryExpression")
+        lines.append(
+            "    | IF ownedExpression QUESTION ownedExpression ELSE ownedExpression"
+        )
         lines.append("    ;")
         lines.append("")
 
-        # Type reference for classification/cast
+        lines.append("primaryExpression")
+        lines.append("    : qualifiedName ( AT_AT | META ) typeReference")
+        lines.append("    | baseExpression")
+        lines.append("      ( DOT featureChainMember )?")
+        lines.append("      (")
+        lines.append("        ( LBRACK sequenceExpressionList RBRACK")
+        lines.append("        | HASH LPAREN sequenceExpressionList RPAREN")
+        lines.append(
+            "        | ARROW featureChainMember ( bodyExpression | qualifiedName | argumentList )"
+        )
+        lines.append("        | DOT bodyExpression")
+        lines.append("        | DOT_QUESTION bodyExpression")
+        lines.append("        )")
+        lines.append("        ( DOT featureChainMember )?")
+        lines.append("      )*")
+        lines.append("    ;")
+        lines.append("")
+
         lines.append("typeReference")
         lines.append("    : qualifiedName")
         lines.append("    ;")
         lines.append("")
 
-        # Sequence expression (no empty alt — use sequenceExpressionList? at call sites)
         lines.append("sequenceExpressionList")
-        lines.append("    : ownedExpression ( COMMA ownedExpression )*")
+        lines.append("    : ownedExpression ( COMMA ownedExpression )* COMMA?")
         lines.append("    ;")
         lines.append("")
 
-        # Base expressions (non-recursive)
         lines.append("baseExpression")
         lines.append("    : nullExpression")
         lines.append("    | literalExpression")
+        lines.append(
+            "    | qualifiedName DOT qualifiedName ( DOT qualifiedName )* argumentList"
+        )
         lines.append("    | featureReferenceExpression")
         lines.append("    | metadataAccessExpression")
         lines.append("    | invocationExpression")
@@ -2598,7 +2613,6 @@ class Antlr4Transformer:
         # Null expression
         lines.append("nullExpression")
         lines.append("    : NULL")
-        lines.append("    | LPAREN RPAREN")
         lines.append("    ;")
         lines.append("")
 
@@ -2622,7 +2636,7 @@ class Antlr4Transformer:
 
         # Constructor
         lines.append("constructorExpression")
-        lines.append("    : NEW qualifiedName argumentList")
+        lines.append("    : NEW featureChainMember argumentList")
         lines.append("    ;")
         lines.append("")
 
