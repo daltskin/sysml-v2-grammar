@@ -143,8 +143,10 @@ def main() -> int:
         ok, msgs = parse(case.input)
         if ok != case.expected:
             failures += 1
-            print(f"❌ {case.note}: expected {'accept' if case.expected else 'reject'}, "
-                  f"got {'accept' if ok else 'reject'}")
+            print(
+                f"❌ {case.note}: expected {'accept' if case.expected else 'reject'}, "
+                f"got {'accept' if ok else 'reject'}"
+            )
             for m in msgs[:2]:
                 print(f"     {m}")
         elif ok:
