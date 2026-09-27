@@ -111,23 +111,39 @@ def ensure_grammar_compiled() -> None:
     compile_dir = BUILD_DIR / "antlr-test"
     compile_dir.mkdir(parents=True, exist_ok=True)
 
+    # NOTE: ANTLR must be given *relative* grammar paths (with cwd=ROOT),
+    # otherwise it writes the generated sources directly into compile_dir
+    # instead of compile_dir/grammar/, and the javac step below fails
+    # because its cwd (GRAMMAR_CLASS_DIR) does not exist.
     subprocess.run(
         [
             "java",
             "-jar",
-            str(ANTLR_JAR),
+            ".build/antlr4.jar",
             "-Dlanguage=Java",
             "-o",
             str(compile_dir),
-            str(ROOT / "grammar" / "SysMLv2Lexer.g4"),
-            str(ROOT / "grammar" / "SysMLv2Parser.g4"),
+            "grammar/SysMLv2Lexer.g4",
+            "grammar/SysMLv2Parser.g4",
         ],
+        cwd=str(ROOT),
         check=True,
         capture_output=True,
     )
 
+    # NOTE: subprocess.run with a list does not perform shell glob
+    # expansion, so "*.java" must be expanded in Python. Passing the
+    # literal string makes javac fail with "invalid flag" / exit 2.
+    java_sources = sorted(p.name for p in GRAMMAR_CLASS_DIR.glob("*.java"))
+    if not java_sources:
+        print(
+            f"❌ ANTLR did not generate any Java sources in {GRAMMAR_CLASS_DIR}.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
     subprocess.run(
-        ["javac", "-cp", f"{ANTLR_JAR}:.", "*.java"],
+        ["javac", "-cp", f"{ANTLR_JAR}:.", *java_sources],
         cwd=str(GRAMMAR_CLASS_DIR),
         check=True,
         capture_output=True,
@@ -135,28 +151,56 @@ def ensure_grammar_compiled() -> None:
 
 
 def parse_file(filepath: Path) -> ParseFailure | None:
-    """Parse a single file through ANTLR4 TestRig. Returns failure or None."""
-    result = subprocess.run(
-        [
-            "java",
-            "-cp",
-            f"{ANTLR_JAR}:.",
-            "org.antlr.v4.gui.TestRig",
-            "SysMLv2Parser",
-            "rootNamespace",
-            str(filepath),
-        ],
-        cwd=str(GRAMMAR_CLASS_DIR),
-        capture_output=True,
-        text=True,
-        timeout=30,
-    )
+    """Parse a single file through ANTLR4 TestRig. Returns failure or None.
+
+    Fails on ANY signal of trouble, not just recognized message patterns:
+      - nonzero process exit (TestRig usually exits 0 even on syntax errors,
+        but infrastructure failures such as missing classes exit nonzero)
+      - subprocess timeout
+      - ANY non-empty stderr (ANTLR reports syntax errors on stderr with
+        "line N:M ..." messages that need not contain the word "error")
+
+    The previous substring check ("error" or "line ") silently swallowed
+    infrastructure failures such as the ClassCastException from invoking
+    TestRig with the parser's class name instead of the grammar base name,
+    reporting every file as PASS without parsing it at all.
+    """
+    try:
+        result = subprocess.run(
+            [
+                "java",
+                "-cp",
+                f"{ANTLR_JAR}:.",
+                "org.antlr.v4.gui.TestRig",
+                # TestRig derives "<grammarName>Lexer" and "<grammarName>Parser"
+                # from the first argument, so it must be the grammar base name
+                # "SysMLv2" -- passing "SysMLv2Parser" loads the parser class as
+                # the lexer and throws ClassCastException on every invocation,
+                # which the old failure detection silently ignored.
+                "SysMLv2",
+                "rootNamespace",
+                str(filepath),
+            ],
+            cwd=str(GRAMMAR_CLASS_DIR),
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+    except subprocess.TimeoutExpired:
+        return ParseFailure(file=_display_path(filepath), stderr="timed out after 120s")
+
+    if result.returncode != 0:
+        detail = (
+            result.stderr.strip().split("\n")[0][:120] or f"exit {result.returncode}"
+        )
+        return ParseFailure(
+            file=_display_path(filepath), stderr=f"exit {result.returncode}: {detail}"
+        )
 
     stderr = result.stderr.strip()
-    if stderr and ("error" in stderr.lower() or "line " in stderr.lower()):
-        rel = str(filepath.relative_to(ROOT))
+    if stderr:
         first_line = stderr.split("\n")[0][:120]
-        return ParseFailure(file=rel, stderr=first_line)
+        return ParseFailure(file=_display_path(filepath), stderr=first_line)
     return None
 
 
@@ -257,6 +301,65 @@ def fetch_fixtures() -> None:
     print("\n✅ Conformance fixtures updated")
 
 
+def _display_path(filepath: Path) -> str:
+    """Relative path when under ROOT, absolute path otherwise."""
+    try:
+        return str(filepath.relative_to(ROOT))
+    except ValueError:
+        return str(filepath)
+
+
+# A file that MUST parse: exercises package/definition/usage and an expression.
+VALID_CONTROL = """package Control {
+    part def P {
+        attribute x : Integer = 1 + 2 * 3;
+    }
+    part p : P;
+}
+"""
+
+# A file that MUST be rejected: unbalanced brace and a stray operator.
+INVALID_CONTROL = """package Control {
+    part def P {
+        attribute x = 1 + ;
+}
+"""
+
+
+def run_self_check() -> None:
+    """Verify the harness itself can distinguish valid from invalid input.
+
+    Runs the TestRig pipeline on one known-good and one known-bad file before
+    touching the real suites. If either control behaves unexpectedly, abort:
+    a runner that cannot fail is worse than no runner at all (see the vacuous
+    PASS history of this script).
+    """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        valid = Path(tmpdir) / "valid.sysml"
+        valid.write_text(VALID_CONTROL)
+        failure = parse_file(valid)
+        if failure is not None:
+            print(
+                "❌ Self-check failed: known-VALID control was rejected:",
+                file=sys.stderr,
+            )
+            print(f"   {failure.stderr}", file=sys.stderr)
+            sys.exit(2)
+
+        invalid = Path(tmpdir) / "invalid.sysml"
+        invalid.write_text(INVALID_CONTROL)
+        failure = parse_file(invalid)
+        if failure is None:
+            print(
+                "❌ Self-check failed: known-INVALID control was accepted. "
+                "The harness cannot detect syntax errors; refusing to run.",
+                file=sys.stderr,
+            )
+            sys.exit(2)
+
+    print("  ✅ Self-check: valid control accepted, invalid control rejected")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="SysML v2 Grammar Conformance Tests")
     parser.add_argument(
@@ -278,6 +381,8 @@ def main() -> None:
     print("=" * 50)
 
     ensure_grammar_compiled()
+
+    run_self_check()
 
     suites_to_run = {args.suite: SUITES[args.suite]} if args.suite else SUITES
     results: list[SuiteResult] = []
