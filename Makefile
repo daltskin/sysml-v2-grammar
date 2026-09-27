@@ -1,4 +1,4 @@
-.PHONY: help install generate sdk sdk-archive test lint format clean ci update-conformance contrib version bump-revision
+.PHONY: help install generate sdk sdk-archive test test-examples lint format clean ci update-conformance contrib version bump-revision
 
 PYTHON     ?= python3
 PIP        ?= pip
@@ -47,6 +47,7 @@ sdk-archive: $(ANTLR_JAR) ## Generate all ANTLR4 SDKs and package a release zip
 # ---------------------------------------------------------------------------
 
 test: $(ANTLR_JAR) ## Validate grammar, parse examples, run conformance
+	$(PYTHON) scripts/ExampleRunnerTest.py
 	@echo "── Compiling grammar (Java target) ──"
 	@mkdir -p $(BUILD_DIR)/antlr-out
 	java -jar $(ANTLR_JAR) -Dlanguage=Java -o $(BUILD_DIR)/antlr-out \
@@ -64,18 +65,7 @@ test: $(ANTLR_JAR) ## Validate grammar, parse examples, run conformance
 	java -jar $(ANTLR_JAR) -Dlanguage=Java -o $(BUILD_DIR)/antlr-test \
 		grammar/SysMLv2Lexer.g4 grammar/SysMLv2Parser.g4
 	cd $(BUILD_DIR)/antlr-test/grammar && javac -cp "$(CURDIR)/$(ANTLR_JAR):." *.java
-	@cd $(BUILD_DIR)/antlr-test/grammar && PASS=0; FAIL=0; \
-	for f in $(CURDIR)/examples/*.sysml; do \
-		printf "  Parsing $$(basename $$f)... "; \
-		ERR=$$(java -cp "$(CURDIR)/$(ANTLR_JAR):." org.antlr.v4.gui.TestRig SysMLv2 rootNamespace "$$f" 2>&1 >/dev/null); \
-		if [ -n "$$ERR" ]; then \
-			echo "❌ FAIL"; echo "$$ERR" | head -1 | sed 's/^/	    /'; FAIL=$$((FAIL + 1)); \
-		else \
-			echo "✅ PASS"; PASS=$$((PASS + 1)); \
-		fi; \
-	done; \
-	echo ""; echo "  Results: $$PASS passed, $$FAIL failed"; \
-	[ $$FAIL -eq 0 ]
+	$(MAKE) test-examples
 	@echo ""
 	@if [ -d test/fixtures/conformance/training ]; then \
 		echo "── Running conformance tests ──"; \
@@ -83,6 +73,21 @@ test: $(ANTLR_JAR) ## Validate grammar, parse examples, run conformance
 	else \
 		echo "── Conformance fixtures not found (run 'make update-conformance' to fetch) ──"; \
 	fi
+
+test-examples:
+	@cd $(BUILD_DIR)/antlr-test/grammar && PASS=0; FAIL=0; \
+	for f in $(CURDIR)/examples/*.sysml; do \
+		printf "  Parsing $$(basename $$f)... "; \
+		ERR=$$(java -cp "$(CURDIR)/$(ANTLR_JAR):." org.antlr.v4.gui.TestRig SysMLv2 rootNamespace "$$f" 2>&1 >/dev/null); \
+		EXIT_CODE=$$?; \
+		if [ $$EXIT_CODE -ne 0 ] || [ -n "$$ERR" ]; then \
+			echo "❌ FAIL"; echo "$$ERR" | head -1 | sed 's/^/	    /'; FAIL=$$((FAIL + 1)); \
+		else \
+			echo "✅ PASS"; PASS=$$((PASS + 1)); \
+		fi; \
+	done; \
+	echo ""; echo "  Results: $$PASS passed, $$FAIL failed"; \
+	[ $$FAIL -eq 0 ]
 
 update-conformance: ## Fetch official OMG conformance fixtures + standard library
 	$(PYTHON) scripts/conformance.py --fetch
