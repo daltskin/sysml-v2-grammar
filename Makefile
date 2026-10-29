@@ -63,6 +63,9 @@ test: $(ANTLR_JAR) ## Validate grammar, parse examples, run conformance
 	@echo "── Running import visibility regressions (Python target) ──"
 	PYTHONPATH="$(CURDIR)/$(BUILD_DIR)/antlr-python" $(PYTHON) scripts/ImportVisibilityTest.py
 	@echo ""
+	@echo "── Running end-occurrence regressions (Python target) ──"
+	PYTHONPATH="$(CURDIR)/$(BUILD_DIR)/antlr-python" $(PYTHON) scripts/EndOccurrenceGrammarTest.py
+	@echo ""
 	@echo "── Parsing example files (Java target) ──"
 	@mkdir -p $(BUILD_DIR)/antlr-test
 	java -jar $(ANTLR_JAR) -Dlanguage=Java -o $(BUILD_DIR)/antlr-test \

@@ -2380,6 +2380,55 @@ class Antlr4Transformer:
             }
         )
 
+        # Fix 54: SysML 2.0 8.2.2.17 omits typed ends from NonBehaviorBodyItem,
+        # unlike the Pilot's OccurrenceUsagePrefix and 2026-09 Flows::messages.
+        # Reuse Fix 40's end syntax; track/remove this BNF departure in PR #18.
+        nonbehavior_body = (
+            "nonBehaviorBodyItem\n"
+            "    : importRule\n"
+            "    | aliasMember\n"
+            "    | definitionMember\n"
+            "    | variantUsageMember\n"
+            "    | nonOccurrenceUsageMember\n"
+            "    | ( sourceSuccessionMember )? structureUsageMember\n"
+            "    ;"
+        )
+        if grammar.count(nonbehavior_body) != 1:
+            raise ValueError(
+                "Fix 54: NonBehaviorBodyItem has changed; review the upstream "
+                "end-occurrence syntax before updating this compatibility patch."
+            )
+        patch(
+            "54",
+            "Conformance fix",
+            "Allow typed ends in shared non-behavior body items",
+            "The 2026-09 library declares `end occurrence source/target` inside "
+            "`Flows::messages`, an action usage. Formal SysML 2.0 "
+            "8.2.2.6.2 defines `EndUsagePrefix`, but 8.2.2.9.2 and 8.2.2.17 "
+            "do not admit it on occurrence usages in `NonBehaviorBodyItem`. "
+            "The [Pilot's `OccurrenceUsagePrefix`]"
+            "(https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/blob/"
+            "a9676a3c4825201b270b59289bf284154842bde1/"
+            "org.omg.sysml.xtext/src/org/omg/sysml/xtext/SysML.xtext#L836-L843) "
+            "does admit `EndUsagePrefix`. This intentional BNF compatibility "
+            "extension reuses `endOccurrenceUsageElement` from Fixes 40/43, "
+            "with the same visibility and optional source-succession prefix "
+            "as ordinary structure members. It applies to all shared body "
+            "contexts, not just the `messages` declaration. "
+            "Tracked in [PR #18](https://github.com/daltskin/sysml-v2-grammar/pull/18). "
+            "Remove this alternative when the upstream BNF supplies an equivalent "
+            "typed-end route, retaining the positive/negative regressions in "
+            "`scripts/EndOccurrenceGrammarTest.py`. Generation fails visibly "
+            "if the expected upstream body rule changes.",
+            nonbehavior_body,
+            nonbehavior_body.replace(
+                "    | ( sourceSuccessionMember )? structureUsageMember",
+                "    | ( sourceSuccessionMember )? memberPrefix endOccurrenceUsageElement\n"
+                "    | ( sourceSuccessionMember )? structureUsageMember",
+            ),
+            rules="nonBehaviorBodyItem",
+        )
+
         return grammar
 
     def generate_patches_md(self, release_tag: str, grammar_version: str) -> str:
