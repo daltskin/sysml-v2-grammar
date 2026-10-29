@@ -5,8 +5,8 @@ OMG SysML v2 KEBNF specification when translated to ANTLR4.
 
 - **Grammar version**: `2026.09.0`
 - **OMG release**: `2026-09`
-- **Total patches**: 53
-- **Applied**: 51
+- **Total patches**: 54
+- **Applied**: 52
 - **Skipped**: 2
 
 ## Expression scope ledger
@@ -348,6 +348,7 @@ The Go ANTLR runtime generates exported methods from rule names. Rules named `em
 | 49 | Allow `REF` in body parameter declarations for `{in ref ...}` blocks | feature | Yes |
 | 50 | Allow `REGULAR_COMMENT` as a no-op expression in `baseExpression` | baseExpression | Yes |
 | 51 | Allow `definitionBodyItem` in `functionBodyPart` for body expressions | functionBodyPart | Yes |
+| 54 | Allow typed ends in shared non-behavior body items | nonBehaviorBodyItem | Yes |
 
 ### Fix 40: Add `endOccurrenceUsageElement` for `end [mult] port/item/part`
 
@@ -420,6 +421,12 @@ Analysis Case Usage Example.sysml uses `= ( //* ... */ )` where the entire expre
 VehicleGeometryAndCoordinateFrames.sysml uses `private attribute` inside a `->forAll { ... }` body expression. The `functionBodyPart` rule only allowed `typeBodyElement` which routes through `featureMember` — too limited for usage elements like `attributeUsage` with visibility modifiers. Added `definitionBodyItem` as an alternative.
 
 **Affected rules**: functionBodyPart
+
+### Fix 54: Allow typed ends in shared non-behavior body items
+
+The 2026-09 library declares `end occurrence source/target` inside `Flows::messages`, an action usage. Formal SysML 2.0 8.2.2.6.2 defines `EndUsagePrefix`, but 8.2.2.9.2 and 8.2.2.17 do not admit it on occurrence usages in `NonBehaviorBodyItem`. The [Pilot's `OccurrenceUsagePrefix`](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/blob/a9676a3c4825201b270b59289bf284154842bde1/org.omg.sysml.xtext/src/org/omg/sysml/xtext/SysML.xtext#L836-L843) does admit `EndUsagePrefix`. This intentional BNF compatibility extension reuses `endOccurrenceUsageElement` from Fixes 40/43, with the same visibility and optional source-succession prefix as ordinary structure members. It applies to all shared body contexts, not just the `messages` declaration. Tracked in [PR #18](https://github.com/daltskin/sysml-v2-grammar/pull/18). Remove this alternative when the upstream BNF supplies an equivalent typed-end route, retaining the positive/negative regressions in `scripts/EndOccurrenceGrammarTest.py`. Generation fails visibly if the expected upstream body rule changes.
+
+**Affected rules**: nonBehaviorBodyItem
 
 ## Extension
 

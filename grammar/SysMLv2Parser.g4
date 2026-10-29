@@ -1464,6 +1464,7 @@ nonBehaviorBodyItem
     | definitionMember
     | variantUsageMember
     | nonOccurrenceUsageMember
+    | ( sourceSuccessionMember )? memberPrefix endOccurrenceUsageElement
     | ( sourceSuccessionMember )? structureUsageMember
     ;
 

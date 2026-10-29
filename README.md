@@ -171,6 +171,21 @@ a pull request with regenerated grammar files.
 - **OMG release**: `2026-09`
 - **Source**: [Systems-Modeling/SysML-v2-Release](https://github.com/Systems-Modeling/SysML-v2-Release/tree/2026-09)
 
+### 2026.09.0 compatibility notes
+
+- Typed ends in action bodies now parse, including the September library's
+  `Flows::messages` source and target ends. The same support applies to shared
+  non-behavior body items in states, calculations and cases.
+- This is an explicit departure from the published SysML 2.0 BNF
+  (8.2.2.9.2 and 8.2.2.17), consistent with the OMG library and the Pilot's
+  `OccurrenceUsagePrefix`. It extends the existing end-occurrence support,
+  rather than changing the downloaded library or excluding it from conformance.
+  [PR #18](https://github.com/daltskin/sysml-v2-grammar/pull/18) tracks the
+  discrepancy. Remove the compatibility alternative when the upstream BNF
+  provides the equivalent route; generation fails if the expected body rule
+  changes. See generated [Fix 54](grammar/PATCHES.md#fix-54-allow-typed-ends-in-shared-non-behavior-body-items)
+  for the evidence and regression tests.
+
 ## Versioning
 
 Grammar versions follow **`YYYY.MM.REV`** format:
