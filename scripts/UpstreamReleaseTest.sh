@@ -10,6 +10,20 @@ assert_equal() {
   fi
 }
 
+assert_failure() {
+  local expected="$1" output status
+  shift
+  # Capture expected errors so GitHub Actions does not create failure annotations.
+  if output=$("$@" 2>&1); then
+    printf 'FAIL: expected command to fail: %s\n' "$*" >&2
+    exit 1
+  else
+    status=$?
+  fi
+  assert_equal 1 "$status"
+  assert_equal "$expected" "$output"
+}
+
 for tag in 2026-09 2026-09.1 2026-09.10 2025-09.1; do
   release_tag_is_valid "$tag"
 done
@@ -28,27 +42,18 @@ assert_equal 2026-09 "$(printf '%s\n' invalid 2026-09 | latest_release_tag)"
 assert_equal 2026-09.1 "$(
   { for i in {1..40}; do echo "unrelated-$i"; done; echo 2026-09.1; } | latest_release_tag
 )"
-if printf '%s\n' invalid 2026-09-rc1 | latest_release_tag; then
-  echo 'FAIL: accepted a list without release tags' >&2
-  exit 1
-fi
-if latest_release_tag < /dev/null; then
-  echo 'FAIL: accepted an empty tag list' >&2
-  exit 1
-fi
+printf '%s\n' invalid 2026-09-rc1 |
+  assert_failure '::error::No valid upstream release tags found' latest_release_tag
+assert_failure '::error::No valid upstream release tags found' latest_release_tag < /dev/null
 
 assert_equal 2026.09.1 "$(next_grammar_version 2026-09.1 2026.09.0)"
 assert_equal 2026.09.8 "$(next_grammar_version 2026-09.2 2026.09.7)"
 assert_equal 2026.09.10 "$(next_grammar_version 2026-09.10 2026.09.9)"
 assert_equal 2026.10.0 "$(next_grammar_version 2026-10 2026.09.7)"
 assert_equal 2027.01.0 "$(next_grammar_version 2027-01.1 2026.12.3)"
-if next_grammar_version 2026-09-rc1 2026.09.0; then
-  echo 'FAIL: accepted an invalid upstream tag' >&2
-  exit 1
-fi
-if next_grammar_version 2026-09.1 invalid; then
-  echo 'FAIL: accepted an invalid grammar version' >&2
-  exit 1
-fi
+assert_failure '::error::Invalid upstream tag format: 2026-09-rc1' \
+  next_grammar_version 2026-09-rc1 2026.09.0
+assert_failure '::error::Invalid grammar version: invalid' \
+  next_grammar_version 2026-09.1 invalid
 
 echo 'Upstream release regressions passed'
