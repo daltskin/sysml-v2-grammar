@@ -47,6 +47,7 @@ sdk-archive: $(ANTLR_JAR) ## Generate all ANTLR4 SDKs and package a release zip
 # ---------------------------------------------------------------------------
 
 test: $(ANTLR_JAR) ## Validate grammar, parse examples, run conformance
+	bash scripts/UpstreamReleaseTest.sh
 	$(PYTHON) scripts/ExampleRunnerTest.py
 	@echo "── Compiling grammar (Java target) ──"
 	@mkdir -p $(BUILD_DIR)/antlr-out
