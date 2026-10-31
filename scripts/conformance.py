@@ -18,6 +18,8 @@ Requires:
 from __future__ import annotations
 
 import argparse
+import json
+import re
 import shutil
 import subprocess
 import sys
@@ -32,14 +34,9 @@ BUILD_DIR = ROOT / ".build"
 ANTLR_JAR = BUILD_DIR / "antlr4.jar"
 GRAMMAR_CLASS_DIR = BUILD_DIR / "antlr-test" / "grammar"
 FIXTURES_DIR = ROOT / "test" / "fixtures" / "conformance"
+CONFIG_PATH = ROOT / "scripts" / "config.json"
 
-LIBRARY_REPO = "Systems-Modeling/SysML-v2-Release"
-LIBRARY_BRANCH = "master"
-LIBRARY_ARCHIVE = (
-    f"https://github.com/{LIBRARY_REPO}/archive/refs/heads/{LIBRARY_BRANCH}.tar.gz"
-)
-
-# Standard library ships with the repo (committed)
+# Standard library is fetched alongside the conformance fixtures (not committed).
 LIBRARY_DIR = ROOT / "sysml.library"
 
 SUITES: dict[str, dict] = {
@@ -47,7 +44,6 @@ SUITES: dict[str, dict] = {
         "label": "Standard Library",
         "dir": LIBRARY_DIR,
         "extensions": [".sysml"],
-        "committed": True,
     },
     "training": {
         "label": "Official Training Examples",
@@ -226,12 +222,25 @@ def run_suite(name: str, suite: dict) -> SuiteResult:
 
 
 def fetch_fixtures() -> None:
-    """Download conformance fixtures from the OMG SysML v2 Release repo."""
-    print(f"📥 Fetching conformance fixtures from {LIBRARY_REPO}...")
+    """Download fixtures and the standard library from the configured release."""
+    with open(CONFIG_PATH) as config_file:
+        config = json.load(config_file)
+    repo = config["release_repo"]
+    tag = config["release_tag"]
+    if not isinstance(repo, str) or not re.fullmatch(
+        r"[a-zA-Z0-9._-]+/[a-zA-Z0-9._-]+", repo
+    ):
+        print(f"❌ Invalid release repository: {repo!r}", file=sys.stderr)
+        sys.exit(1)
+    if not isinstance(tag, str) or not re.fullmatch(r"[a-zA-Z0-9._-]+", tag):
+        print(f"❌ Invalid release tag: {tag!r}", file=sys.stderr)
+        sys.exit(1)
+    archive_url = f"https://github.com/{repo}/archive/refs/tags/{tag}.tar.gz"
+    print(f"📥 Fetching conformance fixtures and standard library from {repo}@{tag}...")
 
     with tempfile.TemporaryDirectory() as tmpdir:
         archive_path = Path(tmpdir) / "release.tar.gz"
-        urllib.request.urlretrieve(LIBRARY_ARCHIVE, str(archive_path))
+        urllib.request.urlretrieve(archive_url, str(archive_path))
 
         extract_dir = Path(tmpdir) / "extracted"
         extract_dir.mkdir()
@@ -239,64 +248,55 @@ def fetch_fixtures() -> None:
         with tarfile.open(archive_path, "r:gz") as tar:
             tar.extractall(path=str(extract_dir), filter="data")
 
-        # Find the extracted root (e.g., SysML-v2-Release-master/)
         roots = list(extract_dir.iterdir())
-        if len(roots) != 1:
+        if len(roots) != 1 or not roots[0].is_dir():
             print(f"❌ Unexpected archive structure: {roots}", file=sys.stderr)
             sys.exit(1)
         src_root = roots[0]
-
-        # Clean and copy fixtures
-        if FIXTURES_DIR.exists():
-            shutil.rmtree(FIXTURES_DIR)
-        FIXTURES_DIR.mkdir(parents=True, exist_ok=True)
 
         mapping = {
             "sysml/src/training": "training",
             "sysml/src/validation": "validation",
             "sysml/src/examples": "examples",
         }
+        library_subdirs = ("Domain Libraries", "Kernel Libraries", "Systems Library")
+        src_lib = src_root / "sysml.library"
 
+        # Validate every source before replacing the existing fixtures or library.
+        for src_rel in mapping:
+            if not find_files(src_root / src_rel, [".sysml"]):
+                print(f"❌ Missing or empty fixture suite: {src_rel}", file=sys.stderr)
+                sys.exit(1)
+        for sub in library_subdirs:
+            if not find_files(src_lib / sub, [".sysml", ".kerml"]):
+                print(
+                    f"❌ Missing or empty standard library directory: {sub}",
+                    file=sys.stderr,
+                )
+                sys.exit(1)
+
+        if FIXTURES_DIR.exists():
+            shutil.rmtree(FIXTURES_DIR)
+        FIXTURES_DIR.mkdir(parents=True, exist_ok=True)
         for src_rel, dst_name in mapping.items():
-            src = src_root / src_rel
             dst = FIXTURES_DIR / dst_name
-            if src.exists():
-                shutil.copytree(src, dst)
-                count = len(list(dst.rglob("*.sysml")))
-                print(f"  {dst_name}: {count} .sysml files")
+            shutil.copytree(src_root / src_rel, dst)
+            count = len(list(dst.rglob("*.sysml")))
+            print(f"  {dst_name}: {count} .sysml files")
 
-    # Also fetch/update standard library
-    print(f"\n📥 Fetching standard library from {LIBRARY_REPO}...")
-    with tempfile.TemporaryDirectory() as tmpdir:
-        archive_path = Path(tmpdir) / "release.tar.gz"
-        urllib.request.urlretrieve(LIBRARY_ARCHIVE, str(archive_path))
-
-        extract_dir = Path(tmpdir) / "extracted"
-        extract_dir.mkdir()
-
-        with tarfile.open(archive_path, "r:gz") as tar:
-            members = [m for m in tar.getmembers() if "/sysml.library/" in m.name]
-            tar.extractall(path=str(extract_dir), members=members, filter="data")
-
-        roots = list(extract_dir.iterdir())
-        if roots:
-            src_lib = roots[0] / "sysml.library"
-            if src_lib.exists():
-                # Clear existing subdirectories
-                for sub in ["Domain Libraries", "Kernel Libraries", "Systems Library"]:
-                    target = LIBRARY_DIR / sub
-                    if target.exists():
-                        shutil.rmtree(target)
-                # Copy fresh
-                for item in src_lib.iterdir():
-                    dst = LIBRARY_DIR / item.name
-                    if item.is_dir():
-                        if dst.exists():
-                            shutil.rmtree(dst)
-                        shutil.copytree(item, dst)
-                sysml_count = len(list(LIBRARY_DIR.rglob("*.sysml")))
-                kerml_count = len(list(LIBRARY_DIR.rglob("*.kerml")))
-                print(f"  Library: {sysml_count} .sysml, {kerml_count} .kerml files")
+        for sub in library_subdirs:
+            target = LIBRARY_DIR / sub
+            if target.exists():
+                shutil.rmtree(target)
+        for item in src_lib.iterdir():
+            if item.is_dir():
+                dst = LIBRARY_DIR / item.name
+                if dst.exists():
+                    shutil.rmtree(dst)
+                shutil.copytree(item, dst)
+        sysml_count = len(list(LIBRARY_DIR.rglob("*.sysml")))
+        kerml_count = len(list(LIBRARY_DIR.rglob("*.kerml")))
+        print(f"  Library: {sysml_count} .sysml, {kerml_count} .kerml files")
 
     print("\n✅ Conformance fixtures updated")
 

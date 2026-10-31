@@ -79,7 +79,7 @@ When the OMG publishes a new SysML v2 Release (detected by the `watch-upstream.y
 # 2. Regenerate the grammar (fetches new KEBNF, applies patches)
 make generate TAG=2026-02
 
-# 3. Fetch the latest conformance fixtures + standard library, then test
+# 3. Fetch conformance fixtures + standard library for the configured release, then test
 make update-conformance
 make test
 
@@ -95,6 +95,12 @@ git add -A
 git commit -m "chore: update grammar to OMG release 2026-03"
 git push
 ```
+
+`make update-conformance` downloads both the official fixtures and standard
+library from `release_repo` and `release_tag` in `scripts/config.json`, not from
+upstream `master`. Update the config before fetching; `make generate TAG=...`
+does not change it. Both downloads are ignored local caches, refreshed by CI
+before conformance testing; they are not committed to this repository.
 
 The CI workflow will automatically create a GitHub Release with the versioned
 grammar artifacts, contribution zip, and all generated language SDKs.
