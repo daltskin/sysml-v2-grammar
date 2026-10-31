@@ -170,9 +170,9 @@ rather than reporting that the grammar is up to date.
 
 ## Current Spec Version
 
-- **Grammar version**: `2026.09.0`
-- **OMG release**: `2026-09`
-- **Source**: [Systems-Modeling/SysML-v2-Release](https://github.com/Systems-Modeling/SysML-v2-Release/tree/2026-09)
+- **Grammar version**: `2026.09.1`
+- **OMG release**: `2026-09.1`
+- **Source**: [Systems-Modeling/SysML-v2-Release](https://github.com/Systems-Modeling/SysML-v2-Release/tree/2026-09.1)
 
 ### 2026.09.0 compatibility notes
 
