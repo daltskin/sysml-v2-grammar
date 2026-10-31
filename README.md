@@ -163,7 +163,10 @@ The ANTLR4 JAR is downloaded and SHA256-verified automatically on first use.
 
 The `watch-upstream.yml` workflow runs weekly to check for new releases of the
 OMG SysML v2 specification. When a new tag is detected, it automatically opens
-a pull request with regenerated grammar files.
+a pull request with regenerated grammar files. It checks all tag pages and
+recognizes both monthly tags (`2026-09`) and dotted updates (`2026-09.1`),
+selecting the newest by version order. Missing valid release tags fail the run
+rather than reporting that the grammar is up to date.
 
 ## Current Spec Version
 
@@ -212,7 +215,10 @@ git commit -m "chore: bump grammar version to $(jq -r .grammar_version scripts/c
 ```
 
 When the `watch-upstream` workflow detects a new OMG release, it automatically
-resets the version to `YYYY.MM.0`.
+resets the version to `YYYY.MM.0` if the release month changes. For an upstream
+update within the same month (e.g., `2026-09` → `2026-09.1`), it increments the
+current grammar revision instead, avoiding reuse of an existing release version.
+The upstream suffix is not the grammar revision counter.
 
 ## Contributing to grammars-v4
 

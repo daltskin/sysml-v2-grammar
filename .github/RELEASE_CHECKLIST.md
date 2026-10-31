@@ -16,7 +16,7 @@ Steps for publishing a new grammar release. Releases are tagged
 
 ```bash
 make bump-revision          # e.g. 2026.01.0 → 2026.01.1
-# or for a new OMG release, watch-upstream resets to YYYY.MM.0
+# watch-upstream resets to YYYY.MM.0 for a new month, or increments REV within the same month
 
 make version                # confirm the new version
 ```
@@ -63,7 +63,8 @@ Format: **`YYYY.MM.REV`**
 | `YYYY.MM` | Derived from the OMG release tag (e.g. `2026-01` → `2026.01`) |
 | `REV`     | Revision counter — starts at `0`, incremented per release    |
 
-- `REV` resets to `0` when the OMG release tag changes (handled by `watch-upstream.yml`)
+- `REV` resets to `0` when the OMG release month changes (handled by `watch-upstream.yml`).
+  Same-month upstream updates (e.g., `2026-09.1`) increment the current grammar revision.
 - Use `make bump-revision` (or `python scripts/bump_version.py`) to increment `REV`
 - Use `make bump-revision` with `--dry` flag to preview without writing changes
 
@@ -71,7 +72,7 @@ Format: **`YYYY.MM.REV`**
 
 | Scenario                          | Action                                  |
 |-----------------------------------|-----------------------------------------|
-| New OMG spec release detected     | `watch-upstream` opens PR → merge → auto-release `YYYY.MM.0` |
+| New OMG spec release detected     | `watch-upstream` opens PR → merge → auto-release (new month: `YYYY.MM.0`; same month: increment `REV`) |
 | Grammar bug fix or improvement    | `make bump-revision` → `make generate` → merge → auto-release |
 | Generator patch (no grammar change) | No release needed (grammar unchanged)  |
 | CI/tooling-only change            | No release needed                       |

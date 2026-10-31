@@ -9,12 +9,14 @@ on:
       - 'grammar/**'
       - 'Makefile'
       - '.github/workflows/generate.yml'
+      - '.github/workflows/watch-upstream.yml'
   pull_request:
     branches: [main]
     paths:
       - 'scripts/**'
       - 'grammar/**'
       - 'Makefile'
+      - '.github/workflows/watch-upstream.yml'
   workflow_dispatch:
 
 permissions:
