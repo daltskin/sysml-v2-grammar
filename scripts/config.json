@@ -6,13 +6,29 @@
     "kerml": "bnf/KerML-textual-bnf.kebnf",
     "sysml": "bnf/SysML-textual-bnf.kebnf"
   },
-  "output": {
-    "parser_grammar": "grammar/SysMLv2Parser.g4",
-    "lexer_grammar": "grammar/SysMLv2Lexer.g4"
+  "patch_file": "scripts/patches.json",
+  "sysml": {
+    "output": {
+      "parser_grammar": "grammar/SysMLv2Parser.g4",
+      "lexer_grammar": "grammar/SysMLv2Lexer.g4",
+      "patches": "grammar/SysML-PATCHES.md"
+    },
+    "options": {
+      "root_rule": "rootNamespace",
+      "grammar_name": "SysMLv2Parser",
+      "lexer_name": "SysMLv2Lexer"
+    }
   },
-  "options": {
-    "root_rule": "rootNamespace",
-    "grammar_name": "SysMLv2Parser",
-    "lexer_name": "SysMLv2Lexer"
+  "kerml": {
+    "output": {
+      "parser_grammar": "grammar/KerMLParser.g4",
+      "lexer_grammar": "grammar/KerMLLexer.g4",
+      "patches": "grammar/KerML-PATCHES.md"
+    },
+    "options": {
+      "root_rule": "rootNamespace",
+      "grammar_name": "KerMLParser",
+      "lexer_name": "KerMLLexer"
+    }
   }
 }

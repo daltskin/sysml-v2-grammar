@@ -8,7 +8,9 @@ OccurrenceUsagePrefix accepts EndUsagePrefix. Fix 54 bridges this BNF gap.
 
 from __future__ import annotations
 
+import json
 import unittest
+from pathlib import Path
 
 from antlr4 import CommonTokenStream, InputStream, Token
 from antlr4.error.ErrorListener import ErrorListener
@@ -17,7 +19,7 @@ from antlr4.tree.Tree import TerminalNode
 from grammar.SysMLv2Lexer import SysMLv2Lexer
 from grammar.SysMLv2Parser import SysMLv2Parser
 
-from generate_grammar import Antlr4Transformer
+from generate_grammar import Antlr4Transformer, select_patches, sysml_language
 
 
 class Errors(ErrorListener):
@@ -121,7 +123,16 @@ class EndOccurrenceTests(unittest.TestCase):
                 self.assertTrue(errors)
 
     def test_upstream_body_drift_fails_visibly(self) -> None:
-        transformer = Antlr4Transformer({}, [])
+        patch_file = json.loads(
+            (Path(__file__).resolve().parent / "patches.json").read_text()
+        )
+        transformer = Antlr4Transformer(
+            {},
+            [],
+            sysml_language(
+                "SysMLv2Lexer", "SysMLv2Parser", select_patches(patch_file, ["54"])
+            ),
+        )
         with self.assertRaisesRegex(
             ValueError, "Fix 54: NonBehaviorBodyItem has changed"
         ):

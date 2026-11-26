@@ -1,18 +1,21 @@
 #!/usr/bin/env python3
-"""SysML v2 Grammar Conformance Test Runner.
+"""SysML v2 and KerML Grammar Conformance Test Runner.
 
-Parses official OMG SysML v2 Release files (training, validation, examples,
-standard library) through the ANTLR4 Java grammar and reports failures.
+Parses official OMG SysML v2 Release files through the ANTLR4 Java grammars
+and reports failures: the SysML files (training, validation, examples,
+standard library) with the SysML grammar, and the KerML files (KerML
+examples, Kernel Libraries) with the KerML grammar.
 
 Usage:
-    python scripts/conformance.py                    # Run all suites
-    python scripts/conformance.py --suite validation  # Run one suite
+    python scripts/conformance.py                     # Run all suites
+    python scripts/conformance.py --language kerml    # Run one language's suites
+    python scripts/conformance.py --suite validation  # Run one suite (of each language)
     python scripts/conformance.py --fetch             # Fetch fixtures first
 
 Requires:
     - Java 17+ on PATH
     - ANTLR4 JAR at .build/antlr4.jar (run `make download-antlr`)
-    - Compiled grammar at .build/antlr-test/ (built automatically)
+    - Compiled grammars at .build/antlr-test/ and .build/antlr-test-kerml/ (built automatically)
 """
 
 from __future__ import annotations
@@ -32,33 +35,59 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 BUILD_DIR = ROOT / ".build"
 ANTLR_JAR = BUILD_DIR / "antlr4.jar"
-GRAMMAR_CLASS_DIR = BUILD_DIR / "antlr-test" / "grammar"
-FIXTURES_DIR = ROOT / "test" / "fixtures" / "conformance"
 CONFIG_PATH = ROOT / "scripts" / "config.json"
 
-# Standard library is fetched alongside the conformance fixtures (not committed).
-LIBRARY_DIR = ROOT / "sysml.library"
+# SysML: the compiled grammar and the fixtures fetched from the configured release.
+SYSML_GRAMMAR_CLASS_DIR = BUILD_DIR / "antlr-test" / "grammar"
+SYSML_FIXTURES_DIR = ROOT / "test" / "fixtures" / "conformance"
+# Standard library is fetched alongside the SysML conformance fixtures (not committed).
+SYSML_LIBRARY_DIR = ROOT / "sysml.library"
 
-SUITES: dict[str, dict] = {
-    "library": {
-        "label": "Standard Library",
-        "dir": LIBRARY_DIR,
-        "extensions": [".sysml"],
+# KerML: the compiled grammar and the fixtures fetched from KerML's configured release.
+KERML_COMPILE_DIR = BUILD_DIR / "antlr-test-kerml"
+KERML_GRAMMAR_CLASS_DIR = KERML_COMPILE_DIR / "grammar"
+KERML_FIXTURES_DIR = ROOT / "test" / "fixtures" / "kerml-conformance"
+# Release directory -> fixture directory, all of them KerML.
+KERML_FETCHED = {
+    "kerml/src/examples": "examples",
+    "sysml.library/Kernel Libraries": "library",
+}
+
+# The suites of each language, by language and suite name.
+SUITES: dict[str, dict[str, dict]] = {
+    "sysml": {
+        "library": {
+            "label": "Standard Library",
+            "dir": SYSML_LIBRARY_DIR,
+            "extensions": [".sysml"],
+        },
+        "training": {
+            "label": "Official Training Examples",
+            "dir": SYSML_FIXTURES_DIR / "training",
+            "extensions": [".sysml"],
+        },
+        "validation": {
+            "label": "Official Validation Models",
+            "dir": SYSML_FIXTURES_DIR / "validation",
+            "extensions": [".sysml"],
+        },
+        "examples": {
+            "label": "Official SysML Examples",
+            "dir": SYSML_FIXTURES_DIR / "examples",
+            "extensions": [".sysml"],
+        },
     },
-    "training": {
-        "label": "Official Training Examples",
-        "dir": FIXTURES_DIR / "training",
-        "extensions": [".sysml"],
-    },
-    "validation": {
-        "label": "Official Validation Models",
-        "dir": FIXTURES_DIR / "validation",
-        "extensions": [".sysml"],
-    },
-    "examples": {
-        "label": "Official SysML Examples",
-        "dir": FIXTURES_DIR / "examples",
-        "extensions": [".sysml"],
+    "kerml": {
+        "examples": {
+            "label": "Official KerML Examples",
+            "dir": KERML_FIXTURES_DIR / "examples",
+            "extensions": [".kerml"],
+        },
+        "library": {
+            "label": "Kernel Libraries",
+            "dir": KERML_FIXTURES_DIR / "library",
+            "extensions": [".kerml"],
+        },
     },
 }
 
@@ -91,8 +120,8 @@ def find_files(directory: Path, extensions: list[str]) -> list[Path]:
     return sorted(results)
 
 
-def ensure_grammar_compiled() -> None:
-    """Compile the grammar with ANTLR4 Java target if not already done."""
+def ensure_sysml_grammar_compiled() -> None:
+    """SysML-specific: compile the SysML grammar with ANTLR4 Java target if not already done."""
     if not ANTLR_JAR.exists():
         print(
             "❌ ANTLR4 JAR not found. Run 'make download-antlr' first.", file=sys.stderr
@@ -100,7 +129,7 @@ def ensure_grammar_compiled() -> None:
         sys.exit(1)
 
     # Check if already compiled
-    if (GRAMMAR_CLASS_DIR / "SysMLv2Parser.class").exists():
+    if (SYSML_GRAMMAR_CLASS_DIR / "SysMLv2Parser.class").exists():
         return
 
     print("  Compiling grammar (Java target)...")
@@ -110,7 +139,7 @@ def ensure_grammar_compiled() -> None:
     # NOTE: ANTLR must be given *relative* grammar paths (with cwd=ROOT),
     # otherwise it writes the generated sources directly into compile_dir
     # instead of compile_dir/grammar/, and the javac step below fails
-    # because its cwd (GRAMMAR_CLASS_DIR) does not exist.
+    # because its cwd (SYSML_GRAMMAR_CLASS_DIR) does not exist.
     subprocess.run(
         [
             "java",
@@ -130,24 +159,69 @@ def ensure_grammar_compiled() -> None:
     # NOTE: subprocess.run with a list does not perform shell glob
     # expansion, so "*.java" must be expanded in Python. Passing the
     # literal string makes javac fail with "invalid flag" / exit 2.
-    java_sources = sorted(p.name for p in GRAMMAR_CLASS_DIR.glob("*.java"))
+    java_sources = sorted(p.name for p in SYSML_GRAMMAR_CLASS_DIR.glob("*.java"))
     if not java_sources:
         print(
-            f"❌ ANTLR did not generate any Java sources in {GRAMMAR_CLASS_DIR}.",
+            f"❌ ANTLR did not generate any Java sources in {SYSML_GRAMMAR_CLASS_DIR}.",
             file=sys.stderr,
         )
         sys.exit(1)
 
     subprocess.run(
         ["javac", "-cp", f"{ANTLR_JAR}:.", *java_sources],
-        cwd=str(GRAMMAR_CLASS_DIR),
+        cwd=str(SYSML_GRAMMAR_CLASS_DIR),
         check=True,
         capture_output=True,
     )
 
 
-def parse_file(filepath: Path) -> ParseFailure | None:
-    """Parse a single file through ANTLR4 TestRig. Returns failure or None.
+def ensure_kerml_grammar_compiled() -> None:
+    """KerML-specific: compile the KerML grammar with the ANTLR4 Java target if not already done."""
+    if not ANTLR_JAR.exists():
+        print(
+            "❌ ANTLR4 JAR not found. Run 'make download-antlr' first.", file=sys.stderr
+        )
+        sys.exit(1)
+    if (KERML_GRAMMAR_CLASS_DIR / "KerMLParser.class").exists():
+        return
+
+    print("  Compiling KerML grammar (Java target)...")
+    # The lexer's tokens file is written to KERML_GRAMMAR_CLASS_DIR and read from there (-lib).
+    KERML_GRAMMAR_CLASS_DIR.mkdir(parents=True, exist_ok=True)
+    subprocess.run(
+        [
+            "java",
+            "-jar",
+            ".build/antlr4.jar",
+            "-Dlanguage=Java",
+            "-o",
+            str(KERML_COMPILE_DIR),
+            "-lib",
+            str(KERML_GRAMMAR_CLASS_DIR),
+            "grammar/KerMLLexer.g4",
+            "grammar/KerMLParser.g4",
+        ],
+        cwd=str(ROOT),
+        check=True,
+        capture_output=True,
+    )
+    java_sources = sorted(p.name for p in KERML_GRAMMAR_CLASS_DIR.glob("*.java"))
+    if not java_sources:
+        print(
+            f"❌ ANTLR did not generate any Java sources in {KERML_GRAMMAR_CLASS_DIR}.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    subprocess.run(
+        ["javac", "-cp", f"{ANTLR_JAR}:.", *java_sources],
+        cwd=str(KERML_GRAMMAR_CLASS_DIR),
+        check=True,
+        capture_output=True,
+    )
+
+
+def parse_file(filepath: Path, grammar: str, class_dir: Path) -> ParseFailure | None:
+    """Parse a single file through ANTLR4 TestRig with grammar `grammar` compiled in `class_dir`. Returns failure or None.
 
     Fails on ANY signal of trouble, not just recognized message patterns:
       - nonzero process exit (TestRig usually exits 0 even on syntax errors,
@@ -173,11 +247,11 @@ def parse_file(filepath: Path) -> ParseFailure | None:
                 # "SysMLv2" -- passing "SysMLv2Parser" loads the parser class as
                 # the lexer and throws ClassCastException on every invocation,
                 # which the old failure detection silently ignored.
-                "SysMLv2",
+                grammar,
                 "rootNamespace",
                 str(filepath),
             ],
-            cwd=str(GRAMMAR_CLASS_DIR),
+            cwd=str(class_dir),
             capture_output=True,
             text=True,
             timeout=120,
@@ -200,8 +274,8 @@ def parse_file(filepath: Path) -> ParseFailure | None:
     return None
 
 
-def run_suite(name: str, suite: dict) -> SuiteResult:
-    """Run conformance tests for a single suite."""
+def run_suite(name: str, suite: dict, grammar: str, class_dir: Path) -> SuiteResult:
+    """Run conformance tests for a single suite, with the grammar `grammar` compiled in `class_dir`."""
     label = suite["label"]
     directory = Path(suite["dir"])
     extensions = suite["extensions"]
@@ -214,15 +288,15 @@ def run_suite(name: str, suite: dict) -> SuiteResult:
 
     failures: list[ParseFailure] = []
     for f in files:
-        failure = parse_file(f)
+        failure = parse_file(f, grammar, class_dir)
         if failure:
             failures.append(failure)
 
     return SuiteResult(name=name, label=label, total=len(files), failures=failures)
 
 
-def fetch_fixtures() -> None:
-    """Download fixtures and the standard library from the configured release."""
+def fetch_sysml_fixtures() -> None:
+    """SysML-specific: download the SysML fixtures and the standard library from the configured release."""
     with open(CONFIG_PATH) as config_file:
         config = json.load(config_file)
     repo = config["release_repo"]
@@ -275,30 +349,78 @@ def fetch_fixtures() -> None:
                 )
                 sys.exit(1)
 
-        if FIXTURES_DIR.exists():
-            shutil.rmtree(FIXTURES_DIR)
-        FIXTURES_DIR.mkdir(parents=True, exist_ok=True)
+        if SYSML_FIXTURES_DIR.exists():
+            shutil.rmtree(SYSML_FIXTURES_DIR)
+        SYSML_FIXTURES_DIR.mkdir(parents=True, exist_ok=True)
         for src_rel, dst_name in mapping.items():
-            dst = FIXTURES_DIR / dst_name
+            dst = SYSML_FIXTURES_DIR / dst_name
             shutil.copytree(src_root / src_rel, dst)
             count = len(list(dst.rglob("*.sysml")))
             print(f"  {dst_name}: {count} .sysml files")
 
         for sub in library_subdirs:
-            target = LIBRARY_DIR / sub
+            target = SYSML_LIBRARY_DIR / sub
             if target.exists():
                 shutil.rmtree(target)
         for item in src_lib.iterdir():
             if item.is_dir():
-                dst = LIBRARY_DIR / item.name
+                dst = SYSML_LIBRARY_DIR / item.name
                 if dst.exists():
                     shutil.rmtree(dst)
                 shutil.copytree(item, dst)
-        sysml_count = len(list(LIBRARY_DIR.rglob("*.sysml")))
-        kerml_count = len(list(LIBRARY_DIR.rglob("*.kerml")))
+        sysml_count = len(list(SYSML_LIBRARY_DIR.rglob("*.sysml")))
+        kerml_count = len(list(SYSML_LIBRARY_DIR.rglob("*.kerml")))
         print(f"  Library: {sysml_count} .sysml, {kerml_count} .kerml files")
 
     print("\n✅ Conformance fixtures updated")
+
+
+def fetch_kerml_fixtures() -> None:
+    """KerML-specific: download the KerML examples and Kernel Libraries of KerML's configured release."""
+    with open(CONFIG_PATH) as config_file:
+        config = json.load(config_file)
+    repo = config["release_repo"]
+    # The KerML grammar may be pinned to another release of the same repository.
+    tag = config.get("kerml", {}).get("release_tag", config["release_tag"])
+    if not isinstance(repo, str) or not re.fullmatch(
+        r"[a-zA-Z0-9._-]+/[a-zA-Z0-9._-]+", repo
+    ):
+        print(f"❌ Invalid release repository: {repo!r}", file=sys.stderr)
+        sys.exit(1)
+    if not isinstance(tag, str) or not re.fullmatch(r"[a-zA-Z0-9._-]+", tag):
+        print(f"❌ Invalid release tag: {tag!r}", file=sys.stderr)
+        sys.exit(1)
+    archive_url = f"https://github.com/{repo}/archive/refs/tags/{tag}.tar.gz"
+    print(f"📥 Fetching KerML conformance fixtures from {repo}@{tag}...")
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        archive_path = Path(tmpdir) / "release.tar.gz"
+        urllib.request.urlretrieve(archive_url, str(archive_path))
+        extract_dir = Path(tmpdir) / "extracted"
+        extract_dir.mkdir()
+        with tarfile.open(archive_path, "r:gz") as tar:
+            tar.extractall(path=str(extract_dir), filter="data")
+        roots = list(extract_dir.iterdir())
+        if len(roots) != 1 or not roots[0].is_dir():
+            print(f"❌ Unexpected archive structure: {roots}", file=sys.stderr)
+            sys.exit(1)
+        src_root = roots[0]
+
+        # Validate every source before replacing the existing fixtures.
+        for src_rel in KERML_FETCHED:
+            if not find_files(src_root / src_rel, [".kerml"]):
+                print(
+                    f"❌ Missing or empty KerML fixture directory: {src_rel}",
+                    file=sys.stderr,
+                )
+                sys.exit(1)
+        if KERML_FIXTURES_DIR.exists():
+            shutil.rmtree(KERML_FIXTURES_DIR)
+        KERML_FIXTURES_DIR.mkdir(parents=True)
+        for src_rel, dst_name in KERML_FETCHED.items():
+            dst = KERML_FIXTURES_DIR / dst_name
+            shutil.copytree(src_root / src_rel, dst)
+            print(f"  {dst_name}: {len(find_files(dst, ['.kerml']))} .kerml files")
 
 
 def _display_path(filepath: Path) -> str:
@@ -309,8 +431,8 @@ def _display_path(filepath: Path) -> str:
         return str(filepath)
 
 
-# A file that MUST parse: exercises package/definition/usage and an expression.
-VALID_CONTROL = """package Control {
+# A SysML file that MUST parse: exercises package/definition/usage and an expression.
+SYSML_VALID_CONTROL = """package Control {
     part def P {
         attribute x : Integer = 1 + 2 * 3;
     }
@@ -318,15 +440,40 @@ VALID_CONTROL = """package Control {
 }
 """
 
-# A file that MUST be rejected: unbalanced brace and a stray operator.
-INVALID_CONTROL = """package Control {
+# A SysML file that MUST be rejected: unbalanced brace and a stray operator.
+SYSML_INVALID_CONTROL = """package Control {
     part def P {
         attribute x = 1 + ;
 }
 """
 
 
-def run_self_check() -> None:
+# A KerML file that MUST parse: KerML declarations, a feature chain and an invariant.
+KERML_VALID_CONTROL = """package Control {
+    classifier C;
+    class K :> C {
+        feature x : C;
+        feature y :> x.x;
+        inv { true }
+    }
+}
+"""
+
+# A KerML file that MUST be rejected: SysML syntax, an unbalanced brace and a stray operator.
+KERML_INVALID_CONTROL = """package Control {
+    part def P {
+        feature x = 1 + ;
+}
+"""
+
+
+def run_self_check(
+    grammar: str,
+    class_dir: Path,
+    valid_control: str,
+    invalid_control: str,
+    suffix: str,
+) -> None:
     """Verify the harness itself can distinguish valid from invalid input.
 
     Runs the TestRig pipeline on one known-good and one known-bad file before
@@ -335,9 +482,9 @@ def run_self_check() -> None:
     PASS history of this script).
     """
     with tempfile.TemporaryDirectory() as tmpdir:
-        valid = Path(tmpdir) / "valid.sysml"
-        valid.write_text(VALID_CONTROL)
-        failure = parse_file(valid)
+        valid = Path(tmpdir) / f"valid{suffix}"
+        valid.write_text(valid_control)
+        failure = parse_file(valid, grammar, class_dir)
         if failure is not None:
             print(
                 "❌ Self-check failed: known-VALID control was rejected:",
@@ -346,9 +493,9 @@ def run_self_check() -> None:
             print(f"   {failure.stderr}", file=sys.stderr)
             sys.exit(2)
 
-        invalid = Path(tmpdir) / "invalid.sysml"
-        invalid.write_text(INVALID_CONTROL)
-        failure = parse_file(invalid)
+        invalid = Path(tmpdir) / f"invalid{suffix}"
+        invalid.write_text(invalid_control)
+        failure = parse_file(invalid, grammar, class_dir)
         if failure is None:
             print(
                 "❌ Self-check failed: known-INVALID control was accepted. "
@@ -360,63 +507,104 @@ def run_self_check() -> None:
     print("  ✅ Self-check: valid control accepted, invalid control rejected")
 
 
+# What each language's suites run with: the grammar, how to compile and fetch,
+# and the self-check controls.
+LANGUAGES: dict[str, dict] = {
+    "sysml": {
+        "title": "SysML v2 Grammar Conformance Tests",
+        "grammar": "SysMLv2",
+        "class_dir": SYSML_GRAMMAR_CLASS_DIR,
+        "compile": ensure_sysml_grammar_compiled,
+        "fetch": fetch_sysml_fixtures,
+        "controls": (SYSML_VALID_CONTROL, SYSML_INVALID_CONTROL, ".sysml"),
+    },
+    "kerml": {
+        "title": "KerML Grammar Conformance Tests",
+        "grammar": "KerML",
+        "class_dir": KERML_GRAMMAR_CLASS_DIR,
+        "compile": ensure_kerml_grammar_compiled,
+        "fetch": fetch_kerml_fixtures,
+        "controls": (KERML_VALID_CONTROL, KERML_INVALID_CONTROL, ".kerml"),
+    },
+}
+
+
+def run_language(
+    language: str, suites: dict[str, dict], verbose: bool
+) -> list[SuiteResult]:
+    """Run one language's suites, after its self-check, and print each result."""
+    spec = LANGUAGES[language]
+    print(spec["title"])
+    print("=" * 50)
+    spec["compile"]()
+    run_self_check(spec["grammar"], spec["class_dir"], *spec["controls"])
+    results: list[SuiteResult] = []
+    for name, suite in suites.items():
+        result = run_suite(name, suite, spec["grammar"], spec["class_dir"])
+        results.append(result)
+        if result.total == 0:
+            continue
+        if result.passed:
+            print(f"  ✅ {result.label}: {result.total}/{result.total} passed")
+        else:
+            failed = len(result.failures)
+            passed = result.total - failed
+            print(
+                f"  ❌ {result.label}: {passed}/{result.total} passed ({failed} failures)"
+            )
+            if verbose:
+                for f in result.failures:
+                    print(f"       ✗ {f.file} — {f.stderr}")
+    print()
+    return results
+
+
 def main() -> None:
-    parser = argparse.ArgumentParser(description="SysML v2 Grammar Conformance Tests")
+    parser = argparse.ArgumentParser(
+        description="SysML v2 and KerML Grammar Conformance Tests"
+    )
     parser.add_argument(
         "--fetch", action="store_true", help="Fetch/update fixtures from OMG repo"
     )
     parser.add_argument(
-        "--suite", choices=list(SUITES.keys()), help="Run only this suite"
+        "--language",
+        choices=list(SUITES.keys()),
+        help="Only this language's suites (default: all)",
+    )
+    parser.add_argument(
+        "--suite",
+        choices=sorted({name for suites in SUITES.values() for name in suites}),
+        help="Run only this suite, of each language that has it",
     )
     parser.add_argument(
         "--verbose", "-v", action="store_true", help="Show individual file failures"
     )
     args = parser.parse_args()
 
+    languages = [args.language] if args.language else list(SUITES.keys())
+
     if args.fetch:
-        fetch_fixtures()
+        for language in languages:
+            LANGUAGES[language]["fetch"]()
         return
 
-    print("SysML v2 Grammar Conformance Tests")
-    print("=" * 50)
-
-    ensure_grammar_compiled()
-
-    run_self_check()
-
-    suites_to_run = {args.suite: SUITES[args.suite]} if args.suite else SUITES
     results: list[SuiteResult] = []
-    any_failure = False
-
-    for name, suite in suites_to_run.items():
-        result = run_suite(name, suite)
-        results.append(result)
-
-        if result.total == 0:
-            continue
-
-        if result.passed:
-            print(f"  ✅ {result.label}: {result.total}/{result.total} passed")
-        else:
-            any_failure = True
-            failed = len(result.failures)
-            passed = result.total - failed
-            print(
-                f"  ❌ {result.label}: {passed}/{result.total} passed ({failed} failures)"
-            )
-            if args.verbose:
-                for f in result.failures:
-                    print(f"       ✗ {f.file} — {f.stderr}")
+    for language in languages:
+        suites = SUITES[language]
+        if args.suite:
+            if args.suite not in suites:
+                continue
+            suites = {args.suite: suites[args.suite]}
+        results += run_language(language, suites, args.verbose)
 
     # Summary
-    print()
     total_files = sum(r.total for r in results)
     total_failures = sum(len(r.failures) for r in results)
     print(
         f"📊 Total: {total_files - total_failures}/{total_files} files passed across {len(results)} suites"
     )
 
-    if any_failure:
+    if total_failures:
         print()
         print("Failing files:")
         for r in results:

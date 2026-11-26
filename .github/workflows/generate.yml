@@ -95,7 +95,10 @@ jobs:
             grammar/SysMLv2Parser.g4
             grammar/SysMLv2Lexer.g4
             grammar/SysMLv2Lexer.tokens
-            grammar/PATCHES.md
+            grammar/SysML-PATCHES.md
+            grammar/KerMLParser.g4
+            grammar/KerMLLexer.g4
+            grammar/KerML-PATCHES.md
           if-no-files-found: error
 
       - name: Upload contribution artifact
@@ -202,8 +205,8 @@ jobs:
               grammar files, examples, and a ready-to-submit contribution for
               [antlr/grammars-v4](https://github.com/antlr/grammars-v4)
             - `sysml-v2-sdks-${{ steps.meta.outputs.version }}.zip` —
-              generated ANTLR4 source SDKs for every official target bundled
-              with this release
+              generated ANTLR4 source SDKs of the SysML and the KerML grammar
+              for every official target bundled with this release
           files: |
             ${{ steps.archive.outputs.path }}
             .build/releases/sysml-v2-sdks-${{ steps.meta.outputs.version }}.zip

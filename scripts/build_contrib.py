@@ -241,7 +241,7 @@ def generate_readme(release_tag: str, release_repo: str) -> str:
 
 def build_contrib(output_dir: Path, *, skip_format: bool = False) -> None:
     config = load_config()
-    opts = config["options"]
+    opts = config["sysml"]["options"]
     grammar_name = opts["grammar_name"]
     lexer_name = opts["lexer_name"]
     start_rule = opts["root_rule"]
@@ -317,9 +317,9 @@ def verify_contrib(output_dir: Path) -> bool:
     ok = True
 
     config = load_config()
-    grammar_name = config["options"]["grammar_name"]
-    lexer_name = config["options"]["lexer_name"]
-    start_rule = config["options"]["root_rule"]
+    grammar_name = config["sysml"]["options"]["grammar_name"]
+    lexer_name = config["sysml"]["options"]["lexer_name"]
+    start_rule = config["sysml"]["options"]["root_rule"]
 
     # Check required files exist
     required = [

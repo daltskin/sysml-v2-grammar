@@ -92,7 +92,7 @@ jobs:
           NEW_VERSION=$(next_grammar_version "$LATEST" "$CURRENT_VERSION")
 
           # Update config.json with new tag and version BEFORE
-          # generating, so that PATCHES.md picks up the correct version.
+          # generating, so that SysML-PATCHES.md picks up the correct version.
           jq --arg tag "$LATEST" --arg ver "$NEW_VERSION" \
             '.release_tag = $tag | .grammar_version = $ver' \
             scripts/config.json > scripts/config.json.tmp

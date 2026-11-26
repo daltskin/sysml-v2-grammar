@@ -148,13 +148,13 @@ The generator produces `( LT name GT )? ( name )?` which can match the empty str
 
 ### Fix 14: Optional `identification` in annotation rules
 
-SysML allows anonymous comments, documentation, and representations. Made `identification` optional in comment, doc, and rep declarations.
+`Comment`, `Documentation` and `TextualRepresentation` have an `Identification` that may be empty (KerML 8.2.3.3.2, 8.2.3.1). With Fix 13 requiring a name or short name in `identification`, made it optional in comment, doc, and rep declarations.
 
 **Affected rules**: commentAnnotation, documentation, textualRepresentation
 
 ### Fix 16: Optional `identification` in namespace/type/classifier declarations
 
-SysML allows anonymous definitions. Made `identification` optional in `namespaceDeclaration`, `typeDeclaration`, and `classifierDeclaration`.
+A namespace, type or classifier may be anonymous: its `Identification` is empty (KerML 8.2.3.1). With Fix 13 requiring a name or short name in `identification`, made it optional in `namespaceDeclaration`, `typeDeclaration`, and `classifierDeclaration`.
 
 **Affected rules**: namespaceDeclaration, typeDeclaration, classifierDeclaration
 
@@ -444,13 +444,13 @@ Skipped because the direct ``AS`` classification alternative covers the same par
 
 | # | Summary | Rules | Applied |
 |---|---------|-------|---------|
-| 52 | Remove 45 unreachable parser rules | (45 rules removed — see commit for full list) | Yes |
+| 52 | Remove 45 unreachable parser rules | (45 rules removed) | Yes |
 
 ### Fix 52: Remove 45 unreachable parser rules
 
-Removed 45 parser rules unreachable from `rootNamespace`. These include merged rules (Fixes 11/22 left definitions behind), feature chain rules (merged into `qualifiedName ( DOT qualifiedName )*` patterns), and metamodel wrapper passthroughs (e.g., `bodyArgumentMember : bodyArgument`) that exist in the KEBNF for type annotations with no ANTLR4 equivalent. Reduces the grammar by ~9%, resulting in smaller ATN serialization, fewer DFA decisions, shallower parse trees, and fewer generated Context classes.
+Removed 45 parser rules unreachable from `rootNamespace`: definitions that other fixes left behind, or that no production references.
 
-**Affected rules**: (45 rules removed — see commit for full list)
+**Affected rules**: (45 rules removed)
 
 ---
 

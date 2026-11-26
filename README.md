@@ -16,7 +16,9 @@ make test              # Validate grammar + parse examples + conformance
 | Command | Description |
 |---------|-------------|
 | `make install` | Install Python dependencies + linting tools |
-| `make generate` | Regenerate `.g4` grammar from OMG spec |
+| `make generate` | Regenerate the SysML and KerML `.g4` grammars from the OMG spec |
+| `make generate-sysml` | Regenerate the SysML grammar only |
+| `make generate-kerml` | Regenerate the KerML grammar only |
 | `make sdk` | Generate ANTLR4 source SDKs for all targets, or one via `LANGUAGE=...` |
 | `make sdk-archive` | Generate all SDKs and package `.build/releases/sysml-v2-sdks-<version>.zip` |
 | `make test` | Compile grammar, parse examples, run conformance tests |
@@ -24,18 +26,24 @@ make test              # Validate grammar + parse examples + conformance
 | `make format` | Auto-format Python scripts |
 | `make clean` | Remove all generated/cached artifacts |
 | `make ci` | Full CI pipeline (`lint` + `test` + `contrib` + `sdk-archive`) |
-| `make update-conformance` | Fetch official OMG conformance fixtures |
+| `make update-conformance` | Fetch official OMG conformance fixtures, SysML and KerML |
 | `make help` | Show all targets |
 
 ## Generate Target-Language SDKs
 
 ANTLR4 can emit parser source trees for every code generator bundled in the
-pinned toolchain. This repo exposes that directly:
+pinned toolchain. This repo exposes that directly, for the SysML and the KerML
+grammar alike: each target's folder holds one folder per grammar, `sysml/`
+(`SysMLv2Lexer`/`SysMLv2Parser`) and `kerml/` (`KerMLLexer`/`KerMLParser`), and
+`manifest.json` names each grammar's folder, files and release. The grammars
+share rule names, so they are kept apart: in one Go package or PHP namespace
+their context classes would clash.
 
 ```bash
 make sdk                 # Generate every ANTLR4 target under .build/sdks/
 make sdk LANGUAGE=Cpp    # Generate only the C++ SDK
 make sdk LANGUAGE=Go     # Generate only the Go SDK
+make sdk GRAMMAR=kerml   # Generate only the KerML grammar's SDKs
 make sdk SDK_JOBS=0      # Auto-parallelize by CPU count (fastest)
 make sdk-archive         # Generate all SDKs + zip them for release use
 ```
@@ -63,8 +71,8 @@ For the current ANTLR `4.13.2` toolchain, `make sdk` generates source SDKs for:
 - `Swift`
 - `TypeScript`
 
-The generated output lives under `.build/sdks/<Language>/` and includes a
-`manifest.json` file describing the grammar version, upstream release tag, and
+The generated output lives under `.build/sdks/<Language>/<grammar>/`, next to a
+`.build/sdks/manifest.json` file describing the grammar version, upstream release tag, and
 generated targets. These SDKs are raw ANTLR output, so language-specific
 runtimes and packaging remain the responsibility of downstream consumers.
 
@@ -83,8 +91,8 @@ make generate TAG=2026-02
 make update-conformance
 make test
 
-# 4. If tests fail, add new patches to
-#    scripts/generate_grammar.py (see grammar/PATCHES.md for existing ones),
+# 4. If tests fail, add new patches to scripts/patches.json
+#    (see grammar/SysML-PATCHES.md and grammar/KerML-PATCHES.md for existing ones),
 #    then repeat from step 2.
 
 # 5. Once green, run the full CI pipeline to verify everything
@@ -98,7 +106,8 @@ git push
 
 `make update-conformance` downloads both the official fixtures and standard
 library from `release_repo` and `release_tag` in `scripts/config.json`, not from
-upstream `master`. Update the config before fetching; `make generate TAG=...`
+upstream `master`, and the KerML fixtures (the KerML examples and the Kernel
+Libraries) from the same repository at KerML's release tag. Update the config before fetching; `make generate TAG=...`
 does not change it. Both downloads are ignored local caches, refreshed by CI
 before conformance testing; they are not committed to this repository.
 
@@ -107,10 +116,10 @@ grammar artifacts, contribution zip, and all generated language SDKs.
 
 ### Patch Workflow
 
-The OMG KEBNF spec has known ambiguities and omissions that require post-generation patches. These are applied automatically by `generate_grammar.py` and documented in [grammar/PATCHES.md](grammar/PATCHES.md). When a new upstream release introduces new constructs that fail conformance:
+The OMG KEBNF spec has known ambiguities and omissions that require post-generation patches. These are applied automatically by `generate_grammar.py` and documented in [grammar/SysML-PATCHES.md](grammar/SysML-PATCHES.md) and [grammar/KerML-PATCHES.md](grammar/KerML-PATCHES.md). When a new upstream release introduces new constructs that fail conformance:
 
-1. Identify failing files: `make test` or `python scripts/conformance.py --verbose`
-2. Add a fix in the `apply_patches()` method of `scripts/generate_grammar.py`
+1. Identify failing files: `make test` or `python scripts/conformance.py --verbose` (`--language sysml|kerml` for one language)
+2. Add the fix to `scripts/patches.json`, keyed by its fix number (`replace` lists its `old`/`new` texts), with the grammars it applies to in its `language` list: `["sysml"]`, `["kerml"]`, or `["sysml", "kerml"]` for a fix of a KerML production, as the SysML grammar contains the KerML productions. The patches are applied in the file's order, so a new fix goes before Fix 52, which removes the rules left unreachable and comes last
 3. Re-generate: `make generate`
 4. Re-test: `make test`
 
@@ -121,13 +130,17 @@ The OMG KEBNF spec has known ambiguities and omissions that require post-generat
 │   ├── SysMLv2Parser.g4     # Parser grammar (generated)
 │   ├── SysMLv2Lexer.g4      # Lexer grammar (generated)
 │   ├── SysMLv2Lexer.tokens  # Token vocabulary
-│   └── PATCHES.md           # Documented post-generation patches
+│   ├── SysML-PATCHES.md     # Documented post-generation patches of the SysML grammar
+│   ├── KerMLParser.g4       # KerML parser grammar (generated)
+│   ├── KerMLLexer.g4        # KerML lexer grammar (generated)
+│   └── KerML-PATCHES.md     # Documented post-generation patches of the KerML grammar
 ├── scripts/
-│   ├── generate_grammar.py  # KEBNF → ANTLR4 converter + patches
+│   ├── generate_grammar.py  # KEBNF → ANTLR4 converter, SysML and KerML
 │   ├── generate_sdks.py     # ANTLR4 target SDK generator + release archive packer
-│   ├── conformance.py       # Conformance test runner
+│   ├── conformance.py       # Conformance test runner, SysML and KerML
 │   ├── build_contrib.py     # grammars-v4 contribution builder
 │   ├── config.json          # Generator configuration
+│   ├── patches.json         # Post-generation patches, by fix number
 │   └── requirements.txt     # Python dependencies
 ├── examples/                # Hand-written .sysml test files
 ├── test/fixtures/           # OMG conformance fixtures (fetched, not committed)
@@ -140,8 +153,10 @@ The OMG KEBNF spec has known ambiguities and omissions that require post-generat
 
 1. **Download** — Fetches `.kebnf` BNF files from the OMG SysML v2 Release repo
 2. **Parse** — Extracts rules, terminals, and properties from KEBNF format
-3. **Transform** — Converts to ANTLR4 with precedence-climbing expressions, keyword extraction, and [spec-ambiguity patches](grammar/PATCHES.md)
+3. **Transform** — Converts to ANTLR4 with precedence-climbing expressions, keyword extraction, and spec-ambiguity patches ([SysML](grammar/SysML-PATCHES.md), [KerML](grammar/KerML-PATCHES.md))
 4. **Generate** — Writes split lexer/parser `.g4` grammars
+
+The same generator writes the KerML grammar, from the KerML KEBNF alone, rooted at KerML's `rootNamespace` (`--language kerml` generates only it, `--language sysml` only the SysML grammar). In `generate_grammar.py`, the generic part (KEBNF parser, ANTLR4 transformer, patch mechanism) knows no language; the KerML section (expressions, rule transforms, notes and comments) refers to nothing of SysML; the SysML section adds its own transforms. The patches are data, in `scripts/patches.json`, applied in the file's order; each one's `language` list names the grammars it applies to, and SysML's include those that fix KerML productions, as the SysML grammar contains them.
 
 ## Configuration
 
@@ -153,7 +168,9 @@ The OMG KEBNF spec has known ambiguities and omissions that require post-generat
 | `grammar_version` | Grammar version (e.g., `2026.02.0`) |
 | `release_repo` | GitHub repo for the OMG spec |
 | `bnf_files` | Paths to KerML and SysML KEBNF files |
-| `output` | Output file names for parser and lexer grammars |
+| `patch_file` | The post-generation patches, by fix number (`scripts/patches.json`) |
+| `sysml` | The SysML grammar: `output` (parser and lexer grammars, patch documentation), `options` (grammar and lexer names, root rule) and `patches` (the fix numbers of `patch_file` it applies, in order) |
+| `kerml` | The KerML grammar: `output`, `options` and `patches` as for `sysml`, and optionally its own `release_tag` and `grammar_version` of the release repository (default: those above) |
 
 ## CI / CD
 
@@ -192,7 +209,7 @@ rather than reporting that the grammar is up to date.
   [PR #18](https://github.com/daltskin/sysml-v2-grammar/pull/18) tracks the
   discrepancy. Remove the compatibility alternative when the upstream BNF
   provides the equivalent route; generation fails if the expected body rule
-  changes. See generated [Fix 54](grammar/PATCHES.md#fix-54-allow-typed-ends-in-shared-non-behavior-body-items)
+  changes. See generated [Fix 54](grammar/SysML-PATCHES.md#fix-54-allow-typed-ends-in-shared-non-behavior-body-items)
   for the evidence and regression tests.
 
 ## Versioning
