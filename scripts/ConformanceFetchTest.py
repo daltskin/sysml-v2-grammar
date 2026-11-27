@@ -43,8 +43,12 @@ class ConformanceFetchTest(unittest.TestCase):
                 "sysml.library/Domain Libraries/Domain.sysml": "package Domain;\n",
                 "sysml.library/Kernel Libraries/Kernel.kerml": "package Kernel;\n",
                 "sysml.library/Systems Library/Systems.sysml": "package Systems;\n",
+                "kerml/src/examples/Simple Tests/Example.kerml": "package Example;\n",
             }
         )
+        self.kerml_fixtures = self.workspace / "kerml-fixtures"
+        self.kerml_fixtures.mkdir()
+        (self.kerml_fixtures / "old.kerml").write_text("old KerML fixtures")
         self.stderr = io.StringIO()
         contexts = ExitStack()
         self.addCleanup(contexts.close)
@@ -53,8 +57,15 @@ class ConformanceFetchTest(unittest.TestCase):
         contexts.enter_context(
             patch.object(conformance, "CONFIG_PATH", self.config_path, create=True)
         )
-        contexts.enter_context(patch.object(conformance, "FIXTURES_DIR", self.fixtures))
-        contexts.enter_context(patch.object(conformance, "LIBRARY_DIR", self.library))
+        contexts.enter_context(
+            patch.object(conformance, "SYSML_FIXTURES_DIR", self.fixtures)
+        )
+        contexts.enter_context(
+            patch.object(conformance, "SYSML_LIBRARY_DIR", self.library)
+        )
+        contexts.enter_context(
+            patch.object(conformance, "KERML_FIXTURES_DIR", self.kerml_fixtures)
+        )
         self.download = contexts.enter_context(
             patch.object(
                 conformance.urllib.request,
@@ -80,7 +91,7 @@ class ConformanceFetchTest(unittest.TestCase):
             self.assertEqual((directory / "old.sysml").read_text(), "old library")
 
     def test_fetches_configured_tag_once_and_refreshes_all_sources(self):
-        conformance.fetch_fixtures()
+        conformance.fetch_sysml_fixtures()
         self.download.assert_called_once()
         self.assertEqual(
             self.download.call_args.args[0],
@@ -110,7 +121,7 @@ class ConformanceFetchTest(unittest.TestCase):
         ):
             self.config.update(release_repo=repo, release_tag=tag)
             self.write_config()
-            conformance.fetch_fixtures()
+            conformance.fetch_sysml_fixtures()
             self.assertEqual(
                 self.download.call_args.args[0],
                 f"https://github.com/{repo}/archive/refs/tags/{tag}.tar.gz",
@@ -130,7 +141,7 @@ class ConformanceFetchTest(unittest.TestCase):
                     if empty:
                         self.archive_files[f"sysml/src/{suite}/README.txt"] = "empty"
                     with self.assertRaises(SystemExit) as error:
-                        conformance.fetch_fixtures()
+                        conformance.fetch_sysml_fixtures()
                     self.assertEqual(error.exception.code, 1)
                     self.assertIn(suite, self.stderr.getvalue())
                     self.assert_existing_data_preserved()
@@ -145,7 +156,7 @@ class ConformanceFetchTest(unittest.TestCase):
                     if not path.startswith(f"sysml.library/{name}/")
                 }
                 with self.assertRaises(SystemExit) as error:
-                    conformance.fetch_fixtures()
+                    conformance.fetch_sysml_fixtures()
                 self.assertEqual(error.exception.code, 1)
                 self.assertIn(name, self.stderr.getvalue())
                 self.assert_existing_data_preserved()
@@ -164,15 +175,54 @@ class ConformanceFetchTest(unittest.TestCase):
                 self.config = {**original, field: value}
                 self.write_config()
                 with self.assertRaises(SystemExit) as error:
-                    conformance.fetch_fixtures()
+                    conformance.fetch_sysml_fixtures()
                 self.assertEqual(error.exception.code, 1)
                 self.assert_existing_data_preserved()
         self.download.assert_not_called()
 
+    def test_kerml_fetch_refreshes_examples_and_kernel_libraries(self):
+        conformance.fetch_kerml_fixtures()
+        self.download.assert_called_once()
+        self.assertFalse((self.kerml_fixtures / "old.kerml").exists())
+        self.assertEqual(
+            (
+                self.kerml_fixtures / "examples" / "Simple Tests" / "Example.kerml"
+            ).read_text(),
+            "package Example;\n",
+        )
+        self.assertEqual(
+            (self.kerml_fixtures / "library" / "Kernel.kerml").read_text(),
+            "package Kernel;\n",
+        )
+
+    def test_kerml_fetch_rejects_missing_sources_before_replacing_data(self):
+        original = self.archive_files.copy()
+        for prefix in ("kerml/src/examples/", "sysml.library/Kernel Libraries/"):
+            with self.subTest(missing=prefix):
+                self.archive_files = {
+                    path: content
+                    for path, content in original.items()
+                    if not path.startswith(prefix)
+                }
+                with self.assertRaises(SystemExit) as error:
+                    conformance.fetch_kerml_fixtures()
+                self.assertEqual(error.exception.code, 1)
+                self.assertIn(prefix.rstrip("/"), self.stderr.getvalue())
+                self.assertEqual(
+                    (self.kerml_fixtures / "old.kerml").read_text(),
+                    "old KerML fixtures",
+                )
+
+    def test_both_languages_are_fetched_from_one_download(self):
+        conformance.fetch_fixtures(["sysml", "kerml"])
+        self.download.assert_called_once()
+        self.assertTrue((self.fixtures / "training" / "Model.sysml").exists())
+        self.assertTrue((self.kerml_fixtures / "library" / "Kernel.kerml").exists())
+
     def test_download_errors_preserve_existing_data(self):
         self.download.side_effect = URLError("download failed")
         with self.assertRaises(URLError):
-            conformance.fetch_fixtures()
+            conformance.fetch_sysml_fixtures()
         self.assert_existing_data_preserved()
 
 

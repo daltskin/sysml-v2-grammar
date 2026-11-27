@@ -57,7 +57,7 @@ The KEBNF uses `isNegated ?= 'not'` without explicit `?`, but the `?=` boolean a
 
 ### Fix 4: Make `STANDARD` optional in `libraryPackage`
 
-Same `?=` boolean assignment issue as Fix 3.
+The KEBNF uses `isStandard ?= 'standard'` without an explicit `?`, but a `?=` boolean assignment is optional: KerML 7.4.14's example `library package AddressBooks` has no `standard`.
 
 **Affected rules**: libraryPackage
 
@@ -89,7 +89,7 @@ The canonical OMG reference model uses `return` inside analysis blocks. Since an
 
 | # | Summary | Rules | Applied |
 |---|---------|-------|---------|
-| 11 | Merge `qualifiedName \| ownedFeatureChain` alternatives | ownedSubsetting, ownedReferenceSubsetting, ownedCrossSubsetting, ownedRedefinition, ownedFeatureTyping, generalType, specificType, unioning, intersecting, differencing, ownedFeatureInverting, ownedConjugation, ownedDisjoining, featureChainMember, instantiatedTypeMember | Yes |
+| 11 | Merge `qualifiedName \| ownedFeatureChain` alternatives | specificType, generalType, conjugation, ownedConjugation, disjoining, ownedDisjoining, unioning, intersecting, differencing, chainingPart, ownedFeatureTyping, ownedSubsetting, ownedReferenceSubsetting, ownedCrossSubsetting, ownedRedefinition, featureInverting, ownedFeatureInverting, featureChainMember | Yes |
 | 12 | Simplify `flowEnd` after feature chain merge | flowEnd | Yes |
 | 22 | Merge expression alternatives in `baseExpression` | baseExpression | Yes |
 | 25 | Factor `definitionBodyItem` for SLL prediction | definitionBodyItem, definitionBodyItemContent | Yes |
@@ -98,7 +98,7 @@ The canonical OMG reference model uses `return` inside analysis blocks. Since an
 
 ANTLR4's SLL prediction mode can't distinguish `qualifiedName` from `ownedFeatureChain` because they share the same prefix. Merged ~15 rules with `qualifiedName | ownedFeatureChain` patterns into `qualifiedName ( DOT qualifiedName )*`. Patterns A–H cover named rules, inline alternatives, and `featureChain` variants.
 
-**Affected rules**: ownedSubsetting, ownedReferenceSubsetting, ownedCrossSubsetting, ownedRedefinition, ownedFeatureTyping, generalType, specificType, unioning, intersecting, differencing, ownedFeatureInverting, ownedConjugation, ownedDisjoining, featureChainMember, instantiatedTypeMember
+**Affected rules**: specificType, generalType, conjugation, ownedConjugation, disjoining, ownedDisjoining, unioning, intersecting, differencing, chainingPart, ownedFeatureTyping, ownedSubsetting, ownedReferenceSubsetting, ownedCrossSubsetting, ownedRedefinition, featureInverting, ownedFeatureInverting, featureChainMember
 
 ### Fix 12: Simplify `flowEnd` after feature chain merge
 
@@ -123,21 +123,21 @@ Replaced the 6-alternative `definitionBodyItem` with a factored version. After `
 | # | Summary | Rules | Applied |
 |---|---------|-------|---------|
 | 13 | Rewrite `identification` to prevent empty match | identification | Yes |
-| 14 | Optional `identification` in annotation rules | commentAnnotation, documentation, textualRepresentation | Yes |
+| 14 | Optional `identification` in annotation rules | comment, documentation, textualRepresentation | Yes |
 | 16 | Optional `identification` in namespace/type/classifier declarations | namespaceDeclaration, typeDeclaration, classifierDeclaration | Yes |
-| 17 | Optional `identification` in relationship declarations | subtypeDeclaration, conjugationDeclaration, disjoiningDeclaration, subclassificationDeclaration, featureTypingDeclaration, subsettingDeclaration, redefinitionDeclaration, featuringDeclaration | Yes |
-| 18 | Optional `identification` in definitions, packages, and other declarations | definitionDeclaration, packageDeclaration, multiplicitySubset, multiplicityRange, dependencyDeclaration, metadataFeatureDeclaration, metadataUsageDeclaration | Yes |
+| 17 | Optional `identification` in relationship declarations | specialization, conjugation, disjoining, subclassification, featureTyping, subsetting, redefinition, typeFeaturing | Yes |
+| 18 | Optional `identification` in definitions, packages, and other declarations | multiplicitySubset, multiplicityRange, metadataFeatureDeclaration, packageDeclaration, dependencyDeclaration, definitionDeclaration | Yes |
 | 23 | Optional `usageDeclaration` and anonymous usages | usage, usageDeclaration | Yes |
 | 24 | Optional `usageDeclaration` in `ownedCrossFeature` | ownedCrossFeature | Yes |
-| 26 | Add `endFeatureUsage` rule; reorder `nonOccurrenceUsageElement` | endFeatureUsage (new), nonOccurrenceUsageElement | Yes |
+| 26 | Add `endFeatureUsage` rule; reorder `nonOccurrenceUsageElement` | endFeatureUsage, nonOccurrenceUsageElement | Yes |
 | 27 | Optional `usageDeclaration` in connection/binding/succession | connectionUsage, bindingConnectorAsUsage, successionAsUsage | Yes |
-| 28 | Optional `usageDeclaration` in interface/allocation/message | interfaceUsageDeclaration, allocationUsage, messageDeclaration | Yes |
+| 28 | Optional `usageDeclaration` in interface/allocation/message | interfaceUsageDeclaration, allocationUsageDeclaration, messageDeclaration | Yes |
 | 29 | Optional `usageDeclaration` in action rules | actionUsageDeclaration, performActionUsageDeclaration | Yes |
-| 30 | Optional `usageDeclaration` in control nodes | mergeNode, joinNode, forkNode, decisionNode | Yes |
-| 31 | Optional `identification` in payload parameter trigger | triggerUsageDeclaration | Yes |
-| 32 | Optional `usageDeclaration` in for-loop variables | forVariableDeclarationMember, forVariableDeclaration | Yes |
-| 33 | Optional `usageDeclaration` in state/transition rules | successionDeclaration, exhibitStateUsage, transitionDeclaration | Yes |
-| 34 | Optional `usageDeclaration` in constraint/requirement/use case | constraintUsageDeclaration, requirementUsage, useCaseUsage | Yes |
+| 30 | Optional `usageDeclaration` in control nodes | mergeNode, decisionNode, joinNode, forkNode | Yes |
+| 31 | Optional `identification` in payload parameter trigger | payloadParameter | Yes |
+| 32 | Optional `usageDeclaration` in for-loop variables | forVariableDeclarationMember | Yes |
+| 33 | Optional `usageDeclaration` in state/transition rules | guardedSuccession, exhibitStateUsage, transitionUsage | Yes |
+| 34 | Optional `usageDeclaration` in constraint/requirement/use case | constraintUsageDeclaration, satisfyRequirementUsage, includeUseCaseUsage | Yes |
 | 35 | Optional `usageDeclaration` in `flowDeclaration`; remove redundant alternative | flowDeclaration | Yes |
 
 ### Fix 13: Rewrite `identification` to prevent empty match
@@ -148,13 +148,13 @@ The generator produces `( LT name GT )? ( name )?` which can match the empty str
 
 ### Fix 14: Optional `identification` in annotation rules
 
-SysML allows anonymous comments, documentation, and representations. Made `identification` optional in comment, doc, and rep declarations.
+`Comment`, `Documentation` and `TextualRepresentation` have an `Identification` that may be empty (KerML 8.2.3.3.2, 8.2.3.1). With Fix 13 requiring a name or short name in `identification`, made it optional in comment, doc, and rep declarations.
 
-**Affected rules**: commentAnnotation, documentation, textualRepresentation
+**Affected rules**: comment, documentation, textualRepresentation
 
 ### Fix 16: Optional `identification` in namespace/type/classifier declarations
 
-SysML allows anonymous definitions. Made `identification` optional in `namespaceDeclaration`, `typeDeclaration`, and `classifierDeclaration`.
+A namespace, type or classifier may be anonymous: its `Identification` is empty (KerML 8.2.3.1). With Fix 13 requiring a name or short name in `identification`, made it optional in `namespaceDeclaration`, `typeDeclaration`, and `classifierDeclaration`.
 
 **Affected rules**: namespaceDeclaration, typeDeclaration, classifierDeclaration
 
@@ -162,13 +162,13 @@ SysML allows anonymous definitions. Made `identification` optional in `namespace
 
 Made `identification` optional in specialization, conjugation, disjoining, subclassifier, typing, subset, redefinition, and featuring declarations.
 
-**Affected rules**: subtypeDeclaration, conjugationDeclaration, disjoiningDeclaration, subclassificationDeclaration, featureTypingDeclaration, subsettingDeclaration, redefinitionDeclaration, featuringDeclaration
+**Affected rules**: specialization, conjugation, disjoining, subclassification, featureTyping, subsetting, redefinition, typeFeaturing
 
 ### Fix 18: Optional `identification` in definitions, packages, and other declarations
 
 Made `identification` optional in `definitionDeclaration`, `packageDeclaration`, `multiplicitySubset`, `multiplicityRange`, `dependencyDeclaration`, `metadataFeatureDeclaration`, and `metadataUsageDeclaration`.
 
-**Affected rules**: definitionDeclaration, packageDeclaration, multiplicitySubset, multiplicityRange, dependencyDeclaration, metadataFeatureDeclaration, metadataUsageDeclaration
+**Affected rules**: multiplicitySubset, multiplicityRange, metadataFeatureDeclaration, packageDeclaration, dependencyDeclaration, definitionDeclaration
 
 ### Fix 23: Optional `usageDeclaration` and anonymous usages
 
@@ -186,7 +186,7 @@ Made `usageDeclaration` optional in the `basicUsagePrefix` alternative.
 
 Handles unnamed end features with specialization in connection/flow/interface definition bodies (e.g., `end :>> QualifiedName;`). Also repositions `defaultReferenceUsage` to end of `nonOccurrenceUsageElement`.
 
-**Affected rules**: endFeatureUsage (new), nonOccurrenceUsageElement
+**Affected rules**: endFeatureUsage, nonOccurrenceUsageElement
 
 ### Fix 27: Optional `usageDeclaration` in connection/binding/succession
 
@@ -198,7 +198,7 @@ Made `usageDeclaration` optional in connection usage, binding connector, and suc
 
 Made `usageDeclaration` optional in `interfaceUsageDeclaration`, allocation declaration, and `messageDeclaration`.
 
-**Affected rules**: interfaceUsageDeclaration, allocationUsage, messageDeclaration
+**Affected rules**: interfaceUsageDeclaration, allocationUsageDeclaration, messageDeclaration
 
 ### Fix 29: Optional `usageDeclaration` in action rules
 
@@ -210,31 +210,31 @@ Made `usageDeclaration` optional in `actionUsageDeclaration` and `performActionU
 
 Made `usageDeclaration` optional in `mergeNode`, `joinNode`, `forkNode`, and `decisionNode`.
 
-**Affected rules**: mergeNode, joinNode, forkNode, decisionNode
+**Affected rules**: mergeNode, decisionNode, joinNode, forkNode
 
 ### Fix 31: Optional `identification` in payload parameter trigger
 
 Made `identification` optional for trigger payload parameters.
 
-**Affected rules**: triggerUsageDeclaration
+**Affected rules**: payloadParameter
 
 ### Fix 32: Optional `usageDeclaration` in for-loop variables
 
 Made `usageDeclaration` optional in `forVariableDeclarationMember` and `forVariableDeclaration`.
 
-**Affected rules**: forVariableDeclarationMember, forVariableDeclaration
+**Affected rules**: forVariableDeclarationMember
 
 ### Fix 33: Optional `usageDeclaration` in state/transition rules
 
 Made `usageDeclaration` optional in succession, exhibit state, and transition declarations.
 
-**Affected rules**: successionDeclaration, exhibitStateUsage, transitionDeclaration
+**Affected rules**: guardedSuccession, exhibitStateUsage, transitionUsage
 
 ### Fix 34: Optional `usageDeclaration` in constraint/requirement/use case
 
 Made `usageDeclaration` optional in `constraintUsageDeclaration`, requirement usage, and use case usage declarations.
 
-**Affected rules**: constraintUsageDeclaration, requirementUsage, useCaseUsage
+**Affected rules**: constraintUsageDeclaration, satisfyRequirementUsage, includeUseCaseUsage
 
 ### Fix 35: Optional `usageDeclaration` in `flowDeclaration`; remove redundant alternative
 
@@ -324,23 +324,23 @@ ANTLR warning(154) fires when an optional block `(…)?` or `(…)*` contains an
 
 | # | Summary | Rules | Applied |
 |---|---------|-------|---------|
-| 39 | Rename `empty*` rules for Go target compatibility | emptyFeature_, emptyMultiplicity_, emptyUsage_, emptyActionUsage_ | Yes |
+| 39 | Rename `empty*` rules for Go target compatibility | emptyMultiplicityMember, emptyParameterMember, stateActionUsage, effectBehaviorUsage, emptyEndMember, emptyActionUsage_, emptyFeature_, emptyMultiplicity_, emptyUsage_ | Yes |
 
 ### Fix 39: Rename `empty*` rules for Go target compatibility
 
 The Go ANTLR runtime generates exported methods from rule names. Rules named `empty*` collide with Go identifiers. Appended `_` to: `emptyFeature` → `emptyFeature_`, `emptyMultiplicity` → `emptyMultiplicity_`, `emptyUsage` → `emptyUsage_`, `emptyActionUsage` → `emptyActionUsage_`.
 
-**Affected rules**: emptyFeature_, emptyMultiplicity_, emptyUsage_, emptyActionUsage_
+**Affected rules**: emptyMultiplicityMember, emptyParameterMember, stateActionUsage, effectBehaviorUsage, emptyEndMember, emptyActionUsage_, emptyFeature_, emptyMultiplicity_, emptyUsage_
 
 ## Conformance fix
 
 | # | Summary | Rules | Applied |
 |---|---------|-------|---------|
-| 40 | Add `endOccurrenceUsageElement` for `end [mult] port/item/part` | endOccurrenceUsageElement (new), definitionBodyItem, interfaceOccurrenceUsageElement | Yes |
+| 40 | Add `endOccurrenceUsageElement` for `end [mult] port/item/part` | definitionBodyItem, endOccurrenceUsageElement, interfaceOccurrenceUsageElement | Yes |
 | 41 | Allow bare `NOT SATISFY` without `ASSERT` prefix | satisfyRequirementUsage | Yes |
-| 42 | Handle `//*..*/` block comments in `REGULAR_COMMENT` lexer rule | REGULAR_COMMENT (lexer rule, updated) | Yes |
+| 42 | Handle `//*..*/` block comments in `REGULAR_COMMENT` lexer rule | REGULAR_COMMENT (lexer rule) | Yes |
 | 43 | Allow optional name and `nonunique` in `endOccurrenceUsageElement` | endOccurrenceUsageElement | Yes |
-| 44 | Allow keywords as names in name positions | name, unreservedKeyword (new) | Yes |
+| 44 | Allow keywords as names in name positions | name, unreservedKeyword | Yes |
 | 45 | Reorder `actionNodeMember` before `behaviorUsageMember` in `actionBehaviorMember` | actionBehaviorMember | Yes |
 | 46 | Track cascading parse errors in `SysML.sysml` metadata defs | (cascading — no rule change needed) | Yes |
 | 47 | Allow `send` without inline payload/receiver in `sendNode` | sendNode | Yes |
@@ -354,7 +354,7 @@ The Go ANTLR runtime generates exported methods from rule names. Rules named `em
 
 Official SysML v2 training and validation models use `end [1] port p : P`, `end [0..1] item c : C`, and `end port sp : OutPort` inside connection, interface, and flow definition bodies. Added `endOccurrenceUsageElement : END (ownedCrossMultiplicityMember)? occurrenceUsageElement` and referenced it from `definitionBodyItem` and `interfaceOccurrenceUsageElement`.
 
-**Affected rules**: endOccurrenceUsageElement (new), definitionBodyItem, interfaceOccurrenceUsageElement
+**Affected rules**: definitionBodyItem, endOccurrenceUsageElement, interfaceOccurrenceUsageElement
 
 ### Fix 41: Allow bare `NOT SATISFY` without `ASSERT` prefix
 
@@ -364,9 +364,9 @@ The official OMG example `RequirementTest.sysml` uses `not satisfy r1 by p;` wit
 
 ### Fix 42: Handle `//*..*/` block comments in `REGULAR_COMMENT` lexer rule
 
-Official OMG SysML v2 training/validation files use `//* ... */` to comment out code blocks. Changed `REGULAR_COMMENT` to `'//'? '/*' .*? '*/'` so it also matches the `//` prefix form. ANTLR longest-match ensures `REGULAR_COMMENT` wins over `SINGLE_LINE_NOTE` for single-line `//* ... */`.
+Official OMG SysML v2 training/validation files use `//* ... */` to comment out code blocks. `REGULAR_COMMENT` is `'/*' .*? '*/' | '//*' .*? '*/'`, so it also matches the `//*` form. ANTLR's longest match makes `REGULAR_COMMENT` win over `SINGLE_LINE_NOTE` for a `//* ... */`.
 
-**Affected rules**: REGULAR_COMMENT (lexer rule, updated)
+**Affected rules**: REGULAR_COMMENT (lexer rule)
 
 ### Fix 43: Allow optional name and `nonunique` in `endOccurrenceUsageElement`
 
@@ -378,7 +378,7 @@ Official OMG standard library and examples use `end theCauses [*] occurrence the
 
 The OMG standard library uses keywords as identifiers: `attribute type : String` (ImageMetadata), `alias multiplicity for degeneracy` (ISQChemistryMolecular), `attribute <var> ...` (SI), and `subsets step`, `redefines behavior`, `subsets feature`, `redefines function`, `subsets member`, `redefines predicate` (SysML.sysml). Added `unreservedKeyword` alternative to the `name` rule.
 
-**Affected rules**: name, unreservedKeyword (new)
+**Affected rules**: name, unreservedKeyword
 
 ### Fix 45: Reorder `actionNodeMember` before `behaviorUsageMember` in `actionBehaviorMember`
 
@@ -444,13 +444,13 @@ Skipped because the direct ``AS`` classification alternative covers the same par
 
 | # | Summary | Rules | Applied |
 |---|---------|-------|---------|
-| 52 | Remove 45 unreachable parser rules | (45 rules removed — see commit for full list) | Yes |
+| 52 | Remove 45 unreachable parser rules | (45 rules removed) | Yes |
 
 ### Fix 52: Remove 45 unreachable parser rules
 
-Removed 45 parser rules unreachable from `rootNamespace`. These include merged rules (Fixes 11/22 left definitions behind), feature chain rules (merged into `qualifiedName ( DOT qualifiedName )*` patterns), and metamodel wrapper passthroughs (e.g., `bodyArgumentMember : bodyArgument`) that exist in the KEBNF for type annotations with no ANTLR4 equivalent. Reduces the grammar by ~9%, resulting in smaller ATN serialization, fewer DFA decisions, shallower parse trees, and fewer generated Context classes.
+Removed 45 parser rules unreachable from `rootNamespace`: definitions that other fixes left behind, or that no production references.
 
-**Affected rules**: (45 rules removed — see commit for full list)
+**Affected rules**: (45 rules removed)
 
 ---
 

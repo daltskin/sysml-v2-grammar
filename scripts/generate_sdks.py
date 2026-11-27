@@ -2,11 +2,16 @@
 """Generate language-specific ANTLR4 SDK source trees.
 
 By default this script emits source SDKs for every target language bundled with
-the pinned ANTLR4 JAR.  A specific target can be generated with `--language`.
+the pinned ANTLR4 JAR, each with the SysML and the KerML grammar in a folder of
+its own (`<Language>/sysml/`, `<Language>/kerml/`): both grammars share rule
+names, so in one Go package or PHP namespace their context classes would clash.
+A specific target can be generated with `--language`, a specific grammar with
+`--grammar`.
 
 Examples:
     python scripts/generate_sdks.py
     python scripts/generate_sdks.py --language Cpp
+    python scripts/generate_sdks.py --grammar kerml
     python scripts/generate_sdks.py --archive
 """
 
@@ -29,7 +34,8 @@ OUTPUT_ROOT = BUILD_DIR / "sdks"
 ANTLR_JAR = BUILD_DIR / "antlr4.jar"
 CONFIG_PATH = ROOT / "scripts" / "config.json"
 GRAMMAR_DIR = ROOT / "grammar"
-GRAMMAR_FILES = ["SysMLv2Lexer.g4", "SysMLv2Parser.g4"]
+# The grammars of config.json, in the order they are generated.
+GRAMMARS = ["sysml", "kerml"]
 
 TARGET_PREFIX = "org/antlr/v4/codegen/target/"
 TARGET_SUFFIX = "Target.class"
@@ -86,6 +92,18 @@ def resolve_languages(requested: list[str], supported: list[str]) -> list[str]:
     return list(dict.fromkeys(requested))
 
 
+def grammar_files(config: dict, grammars: list[str]) -> dict[str, list[str]]:
+    """Each grammar's lexer and parser files, relative to grammar/."""
+    files: dict[str, list[str]] = {}
+    for grammar in grammars:
+        output = config[grammar]["output"]
+        files[grammar] = [
+            str((ROOT / output[key]).resolve().relative_to(GRAMMAR_DIR.resolve()))
+            for key in ("lexer_grammar", "parser_grammar")
+        ]
+    return files
+
+
 def ensure_clean_dir(path: Path) -> None:
     """Remove stale generated files before writing a fresh target tree."""
     if path.exists():
@@ -98,34 +116,48 @@ def count_generated_files(path: Path) -> int:
     return sum(1 for item in path.rglob("*") if item.is_file())
 
 
-def generate_language(language: str, output_root: Path) -> tuple[int, str, str, int]:
-    """Generate one target-language SDK with ANTLR4 and return execution details."""
-    output_dir = output_root / language
-    ensure_clean_dir(output_dir)
+def generate_language(
+    language: str, output_root: Path, files: dict[str, list[str]]
+) -> tuple[int, str, str, int]:
+    """Generate one target-language SDK, each grammar in its own folder, named after it."""
+    # ANTLR runs from grammar/, so a relative output root is resolved first.
+    language_dir = output_root.resolve() / language
+    ensure_clean_dir(language_dir)
 
-    # Run from grammar/ so ANTLR writes files directly into the target directory
-    # instead of nesting another `grammar/` level in the output tree.
-    cmd = [
-        "java",
-        "-jar",
-        str(ANTLR_JAR),
-        f"-Dlanguage={language}",
-        "-listener",
-        "-visitor",
-        "-o",
-        str(output_dir),
-        *GRAMMAR_FILES,
-    ]
+    stdout, stderr = "", ""
+    for grammar, grammar_files_ in files.items():
+        # Some targets (Go, PHP) allow only one grammar's files in a folder.
+        output_dir = language_dir / grammar
+        output_dir.mkdir()
+        # Run from grammar/ so ANTLR writes files directly into the target directory
+        # instead of nesting another `grammar/` level in the output tree.
+        cmd = [
+            "java",
+            "-jar",
+            str(ANTLR_JAR),
+            f"-Dlanguage={language}",
+            "-listener",
+            "-visitor",
+            "-o",
+            str(output_dir),
+            # A parser grammar finds its lexer's .tokens file among the generated ones.
+            "-lib",
+            str(output_dir),
+            *grammar_files_,
+        ]
 
-    result = subprocess.run(
-        cmd,
-        cwd=GRAMMAR_DIR,
-        capture_output=True,
-        text=True,
-    )
+        result = subprocess.run(
+            cmd,
+            cwd=GRAMMAR_DIR,
+            capture_output=True,
+            text=True,
+        )
+        stdout += result.stdout
+        stderr += result.stderr
+        if result.returncode != 0:
+            return result.returncode, stdout, stderr, 0
 
-    file_count = count_generated_files(output_dir) if result.returncode == 0 else 0
-    return result.returncode, result.stdout, result.stderr, file_count
+    return 0, stdout, stderr, count_generated_files(language_dir)
 
 
 def resolve_jobs(requested_jobs: int, target_count: int) -> int:
@@ -174,14 +206,18 @@ def report_failure(language: str, stdout: str, stderr: str) -> None:
         print(stderr.strip(), file=sys.stderr)
 
 
-def generate_languages(languages: list[str], output_root: Path, jobs: int) -> None:
+def generate_languages(
+    languages: list[str], output_root: Path, jobs: int, files: dict[str, list[str]]
+) -> None:
     """Generate all requested SDK targets, optionally in parallel."""
     results: dict[str, int] = {}
     failures: list[tuple[str, int, str, str]] = []
 
     if jobs == 1:
         for language in languages:
-            code, stdout, stderr, file_count = generate_language(language, output_root)
+            code, stdout, stderr, file_count = generate_language(
+                language, output_root, files
+            )
             if code != 0:
                 failures.append((language, code, stdout, stderr))
                 continue
@@ -189,7 +225,9 @@ def generate_languages(languages: list[str], output_root: Path, jobs: int) -> No
     else:
         with concurrent.futures.ThreadPoolExecutor(max_workers=jobs) as executor:
             future_map = {
-                executor.submit(generate_language, language, output_root): language
+                executor.submit(
+                    generate_language, language, output_root, files
+                ): language
                 for language in languages
             }
 
@@ -215,13 +253,24 @@ def generate_languages(languages: list[str], output_root: Path, jobs: int) -> No
         print(f"  ✅ {language:<10} {results[language]} file(s)")
 
 
-def write_manifest(output_root: Path, languages: list[str]) -> None:
+def write_manifest(
+    output_root: Path, languages: list[str], grammars: list[str]
+) -> None:
     """Keep the generated output self-describing for release consumers."""
     config = load_config()
     manifest = {
         "grammar_version": config["grammar_version"],
         "release_tag": config["release_tag"],
         "languages": languages,
+        # Each grammar's lexer and parser, and the folder under each language's that holds them.
+        "grammars": {
+            grammar: {
+                "directory": grammar,
+                "lexer": config[grammar]["options"]["lexer_name"],
+                "parser": config[grammar]["options"]["grammar_name"],
+            }
+            for grammar in grammars
+        },
     }
     (output_root / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
 
@@ -262,6 +311,13 @@ def main() -> None:
         help="Generate only the named ANTLR4 target (repeatable)",
     )
     parser.add_argument(
+        "--grammar",
+        action="append",
+        choices=GRAMMARS,
+        default=[],
+        help="Generate only this grammar, sysml or kerml (repeatable; default: both)",
+    )
+    parser.add_argument(
         "--output-root",
         type=Path,
         default=OUTPUT_ROOT,
@@ -285,6 +341,8 @@ def main() -> None:
     )
     args = parser.parse_args()
 
+    grammars = [g for g in GRAMMARS if g in args.grammar] if args.grammar else GRAMMARS
+    files = grammar_files(load_config(), grammars)
     supported = discover_languages()
     languages = resolve_languages(args.language, supported)
     jobs = resolve_jobs(args.jobs, len(languages))
@@ -296,12 +354,13 @@ def main() -> None:
 
     print("🛠️  Generating ANTLR4 SDKs")
     print(f"   Targets: {', '.join(languages)}")
+    print("   Grammars: " + ", ".join(f"{g} ({' '.join(f)})" for g, f in files.items()))
     print(f"   Output:  {args.output_root}")
     print(f"   Jobs:    {jobs}")
 
-    generate_languages(languages, args.output_root, jobs)
+    generate_languages(languages, args.output_root, jobs, files)
 
-    write_manifest(args.output_root, languages)
+    write_manifest(args.output_root, languages, grammars)
 
     if args.archive:
         archive_sdks(args.output_root)

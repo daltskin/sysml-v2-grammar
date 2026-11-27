@@ -1,0 +1,1113 @@
+{
+  "1": {
+    "category": "Spec BNF fix",
+    "language": [
+      "sysml"
+    ],
+    "summary": "Double-THEN in `entryTransitionMember`",
+    "description": "`targetSuccession` expands to `sourceEndMember THEN connectorEndMember` where `sourceEndMember` is empty, producing a double `THEN` keyword. Replaced with `transitionSuccessionMember` which skips the empty source end.",
+    "comment": "Fix 1: entryTransitionMember has 'THEN targetSuccession' but targetSuccession = sourceEndMember THEN connectorEndMember, where sourceEndMember is empty.\nThis creates a double-THEN.\nFix: Replace 'THEN targetSuccession' with 'THEN transitionSuccessionMember' (transitionSuccessionMember = emptyEndMember connectorEndMember, where emptyEndMember is empty, so it just matches connectorEndMember)",
+    "replace": [
+      {
+        "old": "entryTransitionMember\n    : memberPrefix ( guardedTargetSuccession | THEN targetSuccession ) SEMI",
+        "new": "entryTransitionMember\n    : memberPrefix ( guardedTargetSuccession | THEN transitionSuccessionMember ) SEMI"
+      }
+    ]
+  },
+  "2": {
+    "category": "Spec BNF fix",
+    "language": [
+      "sysml"
+    ],
+    "summary": "Double-THEN in `defaultTargetSuccession` (reserved)",
+    "description": "`defaultTargetSuccession` = `sourceEndMember THEN connectorEndMember`. When used as `THEN defaultTargetSuccession`, it creates a double `THEN`. No-op for now \u2014 only applied if tests expose the issue.",
+    "rules": "defaultTargetSuccession",
+    "comment": "Fix 2: defaultTargetSuccession has similar double-THEN issue.\n(No-op for now - only fix if tests expose this)",
+    "applied": false
+  },
+  "3": {
+    "category": "Spec BNF fix",
+    "language": [
+      "sysml"
+    ],
+    "summary": "Make `NOT` optional in `satisfyRequirementUsage`",
+    "description": "The KEBNF uses `isNegated ?= 'not'` without explicit `?`, but the `?=` boolean assignment semantically implies optionality.",
+    "comment": "Fix 3: satisfyRequirementUsage has ( NOT ) but NOT should be optional.",
+    "replace": [
+      {
+        "old": "ASSERT ( NOT ) SATISFY",
+        "new": "ASSERT ( NOT )? SATISFY"
+      }
+    ]
+  },
+  "4": {
+    "category": "Spec BNF fix",
+    "language": [
+      "sysml",
+      "kerml"
+    ],
+    "summary": "Make `STANDARD` optional in `libraryPackage`",
+    "description": "The KEBNF uses `isStandard ?= 'standard'` without an explicit `?`, but a `?=` boolean assignment is optional: KerML 7.4.14's example `library package AddressBooks` has no `standard`.",
+    "comment": "Fix 4: libraryPackage has ( STANDARD ) but STANDARD should be optional.",
+    "replace": [
+      {
+        "old": ": ( STANDARD ) LIBRARY",
+        "new": ": ( STANDARD )? LIBRARY"
+      }
+    ]
+  },
+  "6": {
+    "category": "Spec BNF fix",
+    "language": [
+      "sysml"
+    ],
+    "summary": "Add `allocationDefinition` to `definitionElement`",
+    "description": "An omission in the official SysML v2 BNF spec. `AllocationUsage` IS in `StructureUsageElement`, but `AllocationDefinition` was not added to `DefinitionElement`.",
+    "comment": "Fix 5 (REMOVED): this patch made `visibilityIndicator` optional in `importRule`, but it contradicted the normative grammar.\nBoth the KEBNF and the OMG XText reference implementation (KerML.xtext and SysML.xtext, ImportPrefix fragment) REQUIRE an explicit visibility keyword on every import: ImportPrefix: visibility = VisibilityIndicator 'import' ... (compare MemberPrefix, which wraps it in `( )?`).\nEvery one of the 310 official conformance files and the entire standard library uses an explicit `private`/`public`/`protected` prefix -- zero bare imports.\nRemoving the patch restores the natural KEBNF emission `importRule : visibilityIndicator IMPORT ...` so `import Foo::*;` without visibility is a syntax error.\nFix 6: allocationDefinition is defined as a rule but not included in definitionElement.",
+    "replace": [
+      {
+        "old": "    | metadataDefinition\n    | extendedDefinition",
+        "new": "    | metadataDefinition\n    | allocationDefinition\n    | extendedDefinition"
+      }
+    ]
+  },
+  "7": {
+    "category": "Spec BNF fix",
+    "language": [
+      "sysml"
+    ],
+    "summary": "Make `ASSERT` optional before `SATISFY`",
+    "description": "The OMG reference model (2025-10 release) uses `satisfy` without `assert`. Made optional for backward compatibility with canonical examples.",
+    "comment": "Fix 7: satisfyRequirementUsage requires 'assert' before 'satisfy' in the BNF, but the official OMG reference model uses 'satisfy' without 'assert'.\nMake 'assert' optional for backward compatibility.",
+    "replace": [
+      {
+        "old": "ASSERT ( NOT )? SATISFY",
+        "new": "( ASSERT ( NOT )? )? SATISFY"
+      }
+    ]
+  },
+  "8": {
+    "category": "Spec BNF fix",
+    "language": [
+      "sysml"
+    ],
+    "summary": "Add `ACTION` keyword support to `sendNode`",
+    "description": "`AcceptNode` uses `ActionNodeUsageDeclaration?` (with `action` keyword) via `AcceptNodeDeclaration`. Apply same pattern to `sendNode`.",
+    "comment": "Fix 8: sendNode uses ActionUsageDeclaration?\n(no keyword) but the official OMG reference model uses 'action <name> send ...' pattern.",
+    "replace": [
+      {
+        "old": "sendNode\n    : occurrenceUsagePrefix actionUsageDeclaration? SEND",
+        "new": "sendNode\n    : occurrenceUsagePrefix ( actionNodeUsageDeclaration | actionUsageDeclaration )? SEND"
+      }
+    ]
+  },
+  "9": {
+    "category": "Spec BNF fix",
+    "language": [
+      "sysml"
+    ],
+    "summary": "Add `returnParameterMember` to `caseBodyItem`",
+    "description": "The canonical OMG reference model uses `return` inside analysis blocks. Since analysis extends calculation in the SysML metamodel, `returnParameterMember` should be valid in case bodies.",
+    "comment": "Fix 9: CaseBody does not include ReturnParameterMember in CaseBodyItem, but CalculationBody does.",
+    "replace": [
+      {
+        "old": "caseBodyItem\n    : actionBodyItem\n    | subjectMember",
+        "new": "caseBodyItem\n    : actionBodyItem\n    | returnParameterMember\n    | subjectMember"
+      }
+    ]
+  },
+  "11": {
+    "category": "SLL prediction fix",
+    "language": [
+      "sysml",
+      "kerml"
+    ],
+    "summary": "Merge `qualifiedName | ownedFeatureChain` alternatives",
+    "description": "ANTLR4's SLL prediction mode can't distinguish `qualifiedName` from `ownedFeatureChain` because they share the same prefix. Merged ~15 rules with `qualifiedName | ownedFeatureChain` patterns into `qualifiedName ( DOT qualifiedName )*`. Patterns A\u2013H cover named rules, inline alternatives, and `featureChain` variants.",
+    "comment": "(Former Fix 10 \"Define missing calculationUsageDeclaration\" removed: obsolete as of the OMG 2026-05 release, which rewrote CalculationUsage to use ActionUsageDeclaration and dropped the dangling CalculationUsageDeclaration reference, so no stub is emitted anymore.)\nFix 11: SLL mode ambiguity with qualifiedName | ownedFeatureChain.\nKerML's GeneralType (KerML 8.2.4.1.2), which OwnedSubsetting, OwnedFeatureTyping and OwnedRedefinition are, is [QualifiedName] | OwnedFeatureChain, and other productions have the same alternatives.\nIn SLL prediction mode, ANTLR can't distinguish between qualifiedName (matches just 'name') and ownedFeatureChain (starts with qualifiedName then DOT) because they share the same prefix.\nSLL resolves to the first alternative, consuming just the name and leaving DOT unexpected.\nFix: merge these into a single unambiguous production: qualifiedName ( DOT qualifiedName )*\nThis handles both simple names and dot-separated feature chains.\nPattern A: Rules with 'generalType | qualifiedName | ownedFeatureChain'\nPattern B: Rules with 'qualifiedName | ownedFeatureChain'\nPattern C: Rules with 'qualifiedName | featureChain'\nPattern D: featureChainMember has 3 alternatives that overlap\nPattern E: instantiatedTypeMember overlaps\nPattern F: Inline ( qualifiedName | featureChain ) in rules\nPattern G: Inline ( qualifiedName | ownedFeatureChain ) in rules\nPattern H: chainingDeclaration's ( ownedFeatureChaining | featureChain )",
+    "replace": [
+      {
+        "old": "ownedSubsetting\n    : generalType\n    | qualifiedName\n    | ownedFeatureChain\n    ;",
+        "new": "ownedSubsetting\n    : qualifiedName ( DOT qualifiedName )*\n    ;"
+      },
+      {
+        "old": "ownedReferenceSubsetting\n    : generalType\n    | qualifiedName\n    | ownedFeatureChain\n    ;",
+        "new": "ownedReferenceSubsetting\n    : qualifiedName ( DOT qualifiedName )*\n    ;"
+      },
+      {
+        "old": "ownedCrossSubsetting\n    : generalType\n    | qualifiedName\n    | ownedFeatureChain\n    ;",
+        "new": "ownedCrossSubsetting\n    : qualifiedName ( DOT qualifiedName )*\n    ;"
+      },
+      {
+        "old": "ownedRedefinition\n    : generalType\n    | qualifiedName\n    | ownedFeatureChain\n    ;",
+        "new": "ownedRedefinition\n    : qualifiedName ( DOT qualifiedName )*\n    ;"
+      },
+      {
+        "old": "ownedFeatureTyping\n    : generalType\n    | qualifiedName\n    | ownedFeatureChain\n    ;",
+        "new": "ownedFeatureTyping\n    : qualifiedName ( DOT qualifiedName )*\n    ;"
+      },
+      {
+        "old": "generalType\n    : qualifiedName\n    | ownedFeatureChain\n    ;",
+        "new": "generalType\n    : qualifiedName ( DOT qualifiedName )*\n    ;"
+      },
+      {
+        "old": "specificType\n    : qualifiedName\n    | ownedFeatureChain\n    ;",
+        "new": "specificType\n    : qualifiedName ( DOT qualifiedName )*\n    ;"
+      },
+      {
+        "old": "unioning\n    : qualifiedName\n    | ownedFeatureChain\n    ;",
+        "new": "unioning\n    : qualifiedName ( DOT qualifiedName )*\n    ;"
+      },
+      {
+        "old": "intersecting\n    : qualifiedName\n    | ownedFeatureChain\n    ;",
+        "new": "intersecting\n    : qualifiedName ( DOT qualifiedName )*\n    ;"
+      },
+      {
+        "old": "differencing\n    : qualifiedName\n    | ownedFeatureChain\n    ;",
+        "new": "differencing\n    : qualifiedName ( DOT qualifiedName )*\n    ;"
+      },
+      {
+        "old": "ownedFeatureInverting\n    : qualifiedName\n    | ownedFeatureChain\n    ;",
+        "new": "ownedFeatureInverting\n    : qualifiedName ( DOT qualifiedName )*\n    ;"
+      },
+      {
+        "old": "ownedConjugation\n    : qualifiedName\n    | featureChain\n    ;",
+        "new": "ownedConjugation\n    : qualifiedName ( DOT qualifiedName )*\n    ;"
+      },
+      {
+        "old": "ownedDisjoining\n    : qualifiedName\n    | featureChain\n    ;",
+        "new": "ownedDisjoining\n    : qualifiedName ( DOT qualifiedName )*\n    ;"
+      },
+      {
+        "old": "featureChainMember\n    : featureReferenceMember\n    | ownedFeatureChainMember\n    | qualifiedName\n    ;",
+        "new": "featureChainMember\n    : qualifiedName ( DOT qualifiedName )*\n    ;"
+      },
+      {
+        "old": "instantiatedTypeMember\n    : instantiatedTypeReference\n    | ownedFeatureChainMember\n    ;",
+        "new": "instantiatedTypeMember\n    : qualifiedName ( DOT qualifiedName )*\n    ;"
+      },
+      {
+        "old": "( qualifiedName | featureChain )",
+        "new": "qualifiedName ( DOT qualifiedName )*"
+      },
+      {
+        "old": "( qualifiedName | ownedFeatureChain )",
+        "new": "qualifiedName ( DOT qualifiedName )*"
+      },
+      {
+        "old": "( ownedFeatureChaining | featureChain )",
+        "new": "qualifiedName ( DOT qualifiedName )*"
+      }
+    ]
+  },
+  "12": {
+    "category": "SLL prediction fix",
+    "language": [
+      "sysml"
+    ],
+    "summary": "Simplify `flowEnd` after feature chain merge",
+    "description": "`ownedReferenceSubsetting` now consumes dots greedily (Fix 11), so the explicit `DOT` in `flowEnd` is never reached. Simplified to `qualifiedName ( DOT qualifiedName )*`.",
+    "comment": "Fix 12: flowEnd rule has ( ownedReferenceSubsetting DOT )? which conflicts with Fix 11.\nownedReferenceSubsetting now consumes dots greedily, so the explicit DOT is never reached.\nflowEnd is semantically a feature chain (prefix.flowFeature), so simplify it.",
+    "replace": [
+      {
+        "old": "flowEnd\n    : ( ownedReferenceSubsetting DOT )? flowFeatureMember\n    | ( flowEndSubsetting )? flowFeatureMember\n    ;",
+        "new": "flowEnd\n    : qualifiedName ( DOT qualifiedName )*\n    ;"
+      }
+    ]
+  },
+  "13": {
+    "category": "Extension compatibility",
+    "language": [
+      "sysml",
+      "kerml"
+    ],
+    "summary": "Rewrite `identification` to prevent empty match",
+    "description": "The generator produces `( LT name GT )? ( name )?` which can match the empty string. Rewritten to explicit alternatives that each require at least one component.",
+    "comment": "Anonymous elements and SLL prediction (Fix 13-24)\nKerML's Identification (KerML 8.2.3.1) may be empty, for an anonymous element.\nThese patches keep anonymous elements while no alternative matches the empty string.\nFix 13: Rewrite the identification rule.",
+    "replace": [
+      {
+        "old": "identification\n    : ( LT name GT )? ( name )?\n    ;",
+        "new": "identification\n    : LT name GT name\n    | LT name GT\n    | name\n    ;"
+      }
+    ]
+  },
+  "14": {
+    "category": "Extension compatibility",
+    "language": [
+      "sysml",
+      "kerml"
+    ],
+    "summary": "Optional `identification` in annotation rules",
+    "description": "`Comment`, `Documentation` and `TextualRepresentation` have an `Identification` that may be empty (KerML 8.2.3.3.2, 8.2.3.1). With Fix 13 requiring a name or short name in `identification`, made it optional in comment, doc, and rep declarations.",
+    "comment": "Fix 14: Make identification optional in annotation-related rules.",
+    "replace": [
+      {
+        "old": ": ( COMMENT identification ( ABOUT",
+        "new": ": ( COMMENT identification? ( ABOUT"
+      },
+      {
+        "old": ": DOC identification ( LOCALE",
+        "new": ": DOC identification? ( LOCALE"
+      },
+      {
+        "old": ": ( REP identification )? LANGUAGE",
+        "new": ": ( REP identification? )? LANGUAGE"
+      }
+    ]
+  },
+  "15": {
+    "category": "Structural optimization",
+    "language": [
+      "sysml"
+    ],
+    "summary": "Simplify `rootNamespace` to `packageBodyElement* EOF`",
+    "description": "The `namespaceBodyElement*` alternative is redundant since `packageBodyElement` encompasses all valid top-level elements. `EOF` ensures the parser consumes the entire input.",
+    "comment": "Fix 15: rootNamespace should only match packageBodyElement* EOF.",
+    "replace": [
+      {
+        "old": "rootNamespace\n    : namespaceBodyElement*\n    | packageBodyElement*\n    ;",
+        "new": "rootNamespace\n    : packageBodyElement* EOF\n    ;"
+      }
+    ]
+  },
+  "16": {
+    "category": "Extension compatibility",
+    "language": [
+      "sysml",
+      "kerml"
+    ],
+    "summary": "Optional `identification` in namespace/type/classifier declarations",
+    "description": "A namespace, type or classifier may be anonymous: its `Identification` is empty (KerML 8.2.3.1). With Fix 13 requiring a name or short name in `identification`, made it optional in `namespaceDeclaration`, `typeDeclaration`, and `classifierDeclaration`.",
+    "comment": "Fix 16: Make identification optional in namespace/type/classifier declarations.",
+    "replace": [
+      {
+        "old": "namespaceDeclaration\n    : NAMESPACE identification\n",
+        "new": "namespaceDeclaration\n    : NAMESPACE identification?\n"
+      },
+      {
+        "old": "typeDeclaration\n    : ( ALL )? identification ( ownedMultiplicity )?",
+        "new": "typeDeclaration\n    : ( ALL )? identification? ( ownedMultiplicity )?"
+      },
+      {
+        "old": "classifierDeclaration\n    : ( ALL )? identification ( ownedMultiplicity )?",
+        "new": "classifierDeclaration\n    : ( ALL )? identification? ( ownedMultiplicity )?"
+      }
+    ]
+  },
+  "17": {
+    "category": "Extension compatibility",
+    "language": [
+      "sysml",
+      "kerml"
+    ],
+    "summary": "Optional `identification` in relationship declarations",
+    "description": "Made `identification` optional in specialization, conjugation, disjoining, subclassifier, typing, subset, redefinition, and featuring declarations.",
+    "comment": "Fix 17: Make identification optional in relationship declarations.",
+    "replace": [
+      {
+        "old": ": ( SPECIALIZATION identification )? SUBTYPE",
+        "new": ": ( SPECIALIZATION identification? )? SUBTYPE"
+      },
+      {
+        "old": ": ( CONJUGATION identification )? CONJUGATE",
+        "new": ": ( CONJUGATION identification? )? CONJUGATE"
+      },
+      {
+        "old": ": ( DISJOINING identification )? DISJOINT",
+        "new": ": ( DISJOINING identification? )? DISJOINT"
+      },
+      {
+        "old": ": ( SPECIALIZATION identification )? SUBCLASSIFIER",
+        "new": ": ( SPECIALIZATION identification? )? SUBCLASSIFIER"
+      },
+      {
+        "old": ": ( SPECIALIZATION identification )? TYPING",
+        "new": ": ( SPECIALIZATION identification? )? TYPING"
+      },
+      {
+        "old": ": ( SPECIALIZATION identification )? SUBSET",
+        "new": ": ( SPECIALIZATION identification? )? SUBSET"
+      },
+      {
+        "old": ": ( SPECIALIZATION identification )? REDEFINITION",
+        "new": ": ( SPECIALIZATION identification? )? REDEFINITION"
+      },
+      {
+        "old": ": FEATURING ( identification OF )?",
+        "new": ": FEATURING ( identification? OF )?"
+      }
+    ]
+  },
+  "18": {
+    "category": "Extension compatibility",
+    "language": [
+      "sysml",
+      "kerml"
+    ],
+    "summary": "Optional `identification` in definitions, packages, and other declarations",
+    "description": "Made `identification` optional in `definitionDeclaration`, `packageDeclaration`, `multiplicitySubset`, `multiplicityRange`, `dependencyDeclaration`, `metadataFeatureDeclaration`, and `metadataUsageDeclaration`.",
+    "comment": "Fix 18: Make identification optional in definition/package/multiplicity and other declaration rules.",
+    "replace": [
+      {
+        "old": "definitionDeclaration\n    : identification subclassificationPart?",
+        "new": "definitionDeclaration\n    : identification? subclassificationPart?"
+      },
+      {
+        "old": "packageDeclaration\n    : PACKAGE identification\n",
+        "new": "packageDeclaration\n    : PACKAGE identification?\n"
+      },
+      {
+        "old": "multiplicitySubset\n    : MULTIPLICITY identification subsets",
+        "new": "multiplicitySubset\n    : MULTIPLICITY identification? subsets"
+      },
+      {
+        "old": "multiplicityRange\n    : MULTIPLICITY identification multiplicityBounds",
+        "new": "multiplicityRange\n    : MULTIPLICITY identification? multiplicityBounds"
+      },
+      {
+        "old": "dependencyDeclaration\n    : ( identification FROM )?",
+        "new": "dependencyDeclaration\n    : ( identification? FROM )?"
+      },
+      {
+        "old": "metadataFeatureDeclaration\n    : ( identification ( COLON | TYPED BY ) )?",
+        "new": "metadataFeatureDeclaration\n    : ( identification? ( COLON | TYPED BY ) )?"
+      },
+      {
+        "old": "metadataUsageDeclaration\n    : ( identification ( COLON | TYPED BY ) )?",
+        "new": "metadataUsageDeclaration\n    : ( identification? ( COLON | TYPED BY ) )?"
+      }
+    ]
+  },
+  "18b": {
+    "category": "KerML/SysML merge fix",
+    "language": [
+      "sysml"
+    ],
+    "summary": "Remove bare-bracket alternative from `multiplicityRange`",
+    "description": "The KerML and SysML specs each define `MultiplicityRange`. The generator merges both into alternatives, but the bare-bracket form duplicates `ownedMultiplicityRange`, creating an ambiguity in `ownedMultiplicity`.",
+    "comment": "Fix 18b: Remove bare-bracket alternative from multiplicityRange.",
+    "replace": [
+      {
+        "old": "multiplicityRange\n    : MULTIPLICITY identification? multiplicityBounds typeBody\n    | LBRACK ( multiplicityExpressionMember DOT_DOT )? multiplicityExpressionMember RBRACK\n    ;",
+        "new": "multiplicityRange\n    : MULTIPLICITY identification? multiplicityBounds typeBody\n    ;"
+      }
+    ]
+  },
+  "18c": {
+    "category": "KerML/SysML merge fix",
+    "language": [
+      "sysml"
+    ],
+    "summary": "Remove `multiplicityRange` from `ownedMultiplicity`",
+    "description": "`multiplicityRange` is a declaration-level rule (starts with `MULTIPLICITY` keyword), not an inline modifier like `ownedMultiplicityRange` (bare `[bounds]`).",
+    "comment": "Fix 18c: Remove multiplicityRange from ownedMultiplicity.",
+    "replace": [
+      {
+        "old": "ownedMultiplicity\n    : ownedMultiplicityRange\n    | multiplicityRange\n    ;",
+        "new": "ownedMultiplicity\n    : ownedMultiplicityRange\n    ;"
+      }
+    ]
+  },
+  "18d": {
+    "category": "KerML/SysML merge fix",
+    "language": [
+      "sysml"
+    ],
+    "summary": "Merge `typedBy` alternatives",
+    "description": "KerML defines `TypedBy` with `(COLON | TYPED BY) ownedFeatureTyping`. SysML overrides with `(COLON | DEFINED BY) featureTyping`. Since `featureTyping` includes `ownedFeatureTyping`, the `COLON` prefix is ambiguous. Merged into one alternative.",
+    "comment": "Fix 18d: Merge KerML/SysML typedBy alternatives to fix ambiguity.",
+    "replace": [
+      {
+        "old": "typedBy\n    : ( COLON | TYPED BY ) ownedFeatureTyping\n    | ( COLON | DEFINED BY ) featureTyping\n    ;",
+        "new": "typedBy\n    : ( COLON | TYPED BY | DEFINED BY ) featureTyping\n    ;"
+      }
+    ]
+  },
+  "18e": {
+    "category": "KerML/SysML merge fix",
+    "language": [
+      "sysml"
+    ],
+    "summary": "Merge `typings` alternatives",
+    "description": "Same issue as 18d: `ownedFeatureTyping` vs `featureTyping` in comma-separated list. `featureTyping` is the superset, so use it for both.",
+    "comment": "Fix 18e: Merge KerML/SysML typings alternatives to fix ambiguity.",
+    "replace": [
+      {
+        "old": "typings\n    : typedBy ( COMMA ownedFeatureTyping )*\n    | typedBy ( COMMA featureTyping )*\n    ;",
+        "new": "typings\n    : typedBy ( COMMA featureTyping )*\n    ;"
+      }
+    ]
+  },
+  "19": {
+    "category": "Structural optimization",
+    "language": [
+      "sysml"
+    ],
+    "summary": "Simplify `packageBody` alternatives",
+    "description": "Removed the `namespaceBodyElement | elementFilterMember` alternative. The extension uses only `packageBodyElement*` for package bodies.",
+    "comment": "Fix 19: Remove extra namespaceBodyElement alternative from packageBody.",
+    "replace": [
+      {
+        "old": "packageBody\n    : SEMI\n    | LBRACE ( namespaceBodyElement | elementFilterMember )* RBRACE\n    | LBRACE packageBodyElement* RBRACE\n    ;",
+        "new": "packageBody\n    : SEMI\n    | LBRACE packageBodyElement* RBRACE\n    ;"
+      }
+    ]
+  },
+  "20": {
+    "category": "Structural optimization",
+    "language": [
+      "sysml",
+      "kerml"
+    ],
+    "summary": "Restructure `multiplicityPart` ordering keywords",
+    "description": "Made the ordering keywords (`ORDERED`, `NONUNIQUE`) combinable with `ownedMultiplicity` in a single branch.",
+    "comment": "Fix 20: multiplicityPart restructuring.",
+    "replace": [
+      {
+        "old": "multiplicityPart\n    : ownedMultiplicity\n    | ( ownedMultiplicity )? ( ORDERED ( NONUNIQUE )? | NONUNIQUE ( ORDERED )? )\n    ;",
+        "new": "multiplicityPart\n    : ownedMultiplicity ( ORDERED ( NONUNIQUE )? | NONUNIQUE ( ORDERED )? )?\n    | ( ORDERED ( NONUNIQUE )? | NONUNIQUE ( ORDERED )? )\n    ;"
+      }
+    ]
+  },
+  "21": {
+    "category": "Structural optimization",
+    "language": [
+      "sysml"
+    ],
+    "summary": "Collapse redundant `resultExpressionMember` alternatives",
+    "description": "The generator produces two alternatives where the second (`memberPrefix?`) subsumes the first (`memberPrefix`). Collapsed to a single alternative.",
+    "comment": "Fix 21: resultExpressionMember simplification.",
+    "replace": [
+      {
+        "old": "resultExpressionMember\n    : memberPrefix ownedExpression\n    | memberPrefix? ownedExpression\n    ;",
+        "new": "resultExpressionMember\n    : memberPrefix? ownedExpression\n    ;"
+      }
+    ]
+  },
+  "22": {
+    "category": "SLL prediction fix",
+    "language": [
+      "sysml",
+      "kerml"
+    ],
+    "summary": "Merge expression alternatives in `baseExpression`",
+    "description": "Merged `featureReferenceExpression`, `metadataAccessExpression`, and `invocationExpression` into a single alternative that avoids SLL prediction ambiguity on `qualifiedName` lookahead.",
+    "comment": "Fix 22: SLL baseExpression optimization.",
+    "replace": [
+      {
+        "old": "    | featureReferenceExpression\n    | metadataAccessExpression\n    | invocationExpression\n",
+        "new": "    | qualifiedName ( argumentList | DOT METADATA )?   // merged featureRef/metadataAccess/invocation\n"
+      }
+    ]
+  },
+  "23": {
+    "category": "Extension compatibility",
+    "language": [
+      "sysml"
+    ],
+    "summary": "Optional `usageDeclaration` and anonymous usages",
+    "description": "Anonymous usages are common in SysML (e.g., `part :> Vehicle;`). Made `usageDeclaration` optional in `usage` and added `featureSpecializationPart` as a standalone alternative in `usageDeclaration`.",
+    "comment": "Fix 23: Make usageDeclaration optional and add featureSpecializationPart.",
+    "replace": [
+      {
+        "old": "usage\n    : usageDeclaration usageCompletion\n    ;",
+        "new": "usage\n    : usageDeclaration? usageCompletion\n    ;"
+      },
+      {
+        "old": "usageDeclaration\n    : identification featureSpecializationPart?\n    ;",
+        "new": "usageDeclaration\n    : identification featureSpecializationPart?\n    | featureSpecializationPart\n    ;"
+      }
+    ]
+  },
+  "24": {
+    "category": "Extension compatibility",
+    "language": [
+      "sysml"
+    ],
+    "summary": "Optional `usageDeclaration` in `ownedCrossFeature`",
+    "description": "Made `usageDeclaration` optional in the `basicUsagePrefix` alternative.",
+    "comment": "Fix 24: Make usageDeclaration optional in ownedCrossFeature.",
+    "replace": [
+      {
+        "old": "ownedCrossFeature\n    : basicFeaturePrefix featureDeclaration\n    | basicUsagePrefix usageDeclaration\n    ;",
+        "new": "ownedCrossFeature\n    : basicFeaturePrefix featureDeclaration\n    | basicUsagePrefix usageDeclaration?\n    ;"
+      }
+    ]
+  },
+  "25": {
+    "category": "SLL prediction fix",
+    "language": [
+      "sysml"
+    ],
+    "summary": "Factor `definitionBodyItem` for SLL prediction",
+    "description": "Replaced the 6-alternative `definitionBodyItem` with a factored version. After `memberPrefix` is consumed, the next token (`ALIAS`, `VARIANT`, keyword, or identifier) unambiguously selects the branch, reducing the SLL prediction DFA.",
+    "comment": "Fix 25: SLL definitionBodyItem factoring.",
+    "replace": [
+      {
+        "old": "definitionBodyItem\n    : definitionMember\n    | variantUsageMember\n    | nonOccurrenceUsageMember\n    | ( sourceSuccessionMember )? occurrenceUsageMember\n    | aliasMember\n    | importRule\n    ;",
+        "new": "definitionBodyItem\n    : importRule\n    | memberPrefix definitionBodyItemContent\n    | ( sourceSuccessionMember )? memberPrefix occurrenceUsageElement\n    ;\n\n// Factored dispatch: after memberPrefix is consumed, the next token\n// (ALIAS, VARIANT, keyword, or identifier) unambiguously selects the branch.\n// This reduces the SLL prediction DFA from 6 nullable-prefix alternatives to 3+4.\ndefinitionBodyItemContent\n    : ALIAS ( LT name GT )? ( name )? FOR qualifiedName relationshipBody\n    | VARIANT variantUsageElement\n    | definitionElement\n    | nonOccurrenceUsageElement\n    ;"
+      }
+    ]
+  },
+  "26": {
+    "category": "Extension compatibility",
+    "language": [
+      "sysml"
+    ],
+    "summary": "Add `endFeatureUsage` rule; reorder `nonOccurrenceUsageElement`",
+    "description": "Handles unnamed end features with specialization in connection/flow/interface definition bodies (e.g., `end :>> QualifiedName;`). Also repositions `defaultReferenceUsage` to end of `nonOccurrenceUsageElement`.",
+    "comment": "Fix 26: Add endFeatureUsage rule and update nonOccurrenceUsageElement.",
+    "replace": [
+      {
+        "old": "variantReference\n    : ownedReferenceSubsetting featureSpecialization* usageBody\n    ;\n\nnonOccurrenceUsageElement\n    : defaultReferenceUsage\n    | referenceUsage\n    | attributeUsage\n",
+        "new": "// Unnamed end feature with specialization (e.g., end :>> QualifiedName;)\n// Handles end features in connection/flow/interface definition bodies\n// where no name is given, only a redefines/subsets/typing.\nendFeatureUsage\n    : endUsagePrefix featureDeclaration usageCompletion\n    ;\n\nvariantReference\n    : ownedReferenceSubsetting featureSpecialization* usageBody\n    ;\n\nnonOccurrenceUsageElement\n    : referenceUsage\n    | endFeatureUsage\n    | attributeUsage\n"
+      },
+      {
+        "old": "    | successionAsUsage\n    | extendedUsage\n    ;",
+        "new": "    | successionAsUsage\n    | extendedUsage\n    | defaultReferenceUsage\n    ;"
+      }
+    ]
+  },
+  "27": {
+    "category": "Extension compatibility",
+    "language": [
+      "sysml"
+    ],
+    "summary": "Optional `usageDeclaration` in connection/binding/succession",
+    "description": "Made `usageDeclaration` optional in connection usage, binding connector, and succession as usage declarations.",
+    "comment": "Fix 27: Make usageDeclaration optional in connection/binding/succession.",
+    "replace": [
+      {
+        "old": "    : occurrenceUsagePrefix ( CONNECTION usageDeclaration valuePart?",
+        "new": "    : occurrenceUsagePrefix ( CONNECTION usageDeclaration? valuePart?"
+      },
+      {
+        "old": "    : usagePrefix ( BINDING usageDeclaration )? BIND",
+        "new": "    : usagePrefix ( BINDING usageDeclaration? )? BIND"
+      },
+      {
+        "old": "    : usagePrefix ( SUCCESSION usageDeclaration )? FIRST connectorEndMember THEN connectorEndMember",
+        "new": "    : usagePrefix ( SUCCESSION usageDeclaration? )? FIRST connectorEndMember THEN connectorEndMember"
+      }
+    ]
+  },
+  "28": {
+    "category": "Extension compatibility",
+    "language": [
+      "sysml"
+    ],
+    "summary": "Optional `usageDeclaration` in interface/allocation/message",
+    "description": "Made `usageDeclaration` optional in `interfaceUsageDeclaration`, allocation declaration, and `messageDeclaration`.",
+    "comment": "Fix 28: Make usageDeclaration optional in interface/allocation/message.",
+    "replace": [
+      {
+        "old": "interfaceUsageDeclaration\n    : usageDeclaration valuePart? ( CONNECT interfacePart )?\n",
+        "new": "interfaceUsageDeclaration\n    : usageDeclaration? valuePart? ( CONNECT interfacePart )?\n"
+      },
+      {
+        "old": "    : ALLOCATION usageDeclaration ( ALLOCATE",
+        "new": "    : ALLOCATION usageDeclaration? ( ALLOCATE"
+      },
+      {
+        "old": "messageDeclaration\n    : usageDeclaration valuePart?",
+        "new": "messageDeclaration\n    : usageDeclaration? valuePart?"
+      }
+    ]
+  },
+  "29": {
+    "category": "Extension compatibility",
+    "language": [
+      "sysml"
+    ],
+    "summary": "Optional `usageDeclaration` in action rules",
+    "description": "Made `usageDeclaration` optional in `actionUsageDeclaration` and `performActionUsageDeclaration`.",
+    "comment": "Fix 29: Make usageDeclaration optional in action-related rules.",
+    "replace": [
+      {
+        "old": "actionUsageDeclaration\n    : usageDeclaration valuePart?\n",
+        "new": "actionUsageDeclaration\n    : usageDeclaration? valuePart?\n"
+      },
+      {
+        "old": "performActionUsageDeclaration\n    : ( ownedReferenceSubsetting featureSpecializationPart? | ACTION usageDeclaration ) valuePart?",
+        "new": "performActionUsageDeclaration\n    : ( ownedReferenceSubsetting featureSpecializationPart? | ACTION usageDeclaration? ) valuePart?"
+      }
+    ]
+  },
+  "30": {
+    "category": "Extension compatibility",
+    "language": [
+      "sysml"
+    ],
+    "summary": "Optional `usageDeclaration` in control nodes",
+    "description": "Made `usageDeclaration` optional in `mergeNode`, `joinNode`, `forkNode`, and `decisionNode`.",
+    "comment": "Fix 30: Make usageDeclaration optional in control nodes.",
+    "replace": [
+      {
+        "old": "mergeNode\n    : controlNodePrefix MERGE usageDeclaration actionBody",
+        "new": "mergeNode\n    : controlNodePrefix MERGE usageDeclaration? actionBody"
+      },
+      {
+        "old": "joinNode\n    : controlNodePrefix JOIN usageDeclaration actionBody",
+        "new": "joinNode\n    : controlNodePrefix JOIN usageDeclaration? actionBody"
+      },
+      {
+        "old": "forkNode\n    : controlNodePrefix FORK usageDeclaration actionBody",
+        "new": "forkNode\n    : controlNodePrefix FORK usageDeclaration? actionBody"
+      },
+      {
+        "old": "decisionNode\n    : controlNodePrefix DECIDE usageDeclaration actionBody",
+        "new": "decisionNode\n    : controlNodePrefix DECIDE usageDeclaration? actionBody"
+      }
+    ]
+  },
+  "31": {
+    "category": "Extension compatibility",
+    "language": [
+      "sysml"
+    ],
+    "summary": "Optional `identification` in payload parameter trigger",
+    "description": "Made `identification` optional for trigger payload parameters.",
+    "comment": "Fix 31: Make identification optional in payloadParameter trigger.",
+    "replace": [
+      {
+        "old": "    | identification payloadFeatureSpecializationPart? triggerValuePart",
+        "new": "    | identification? payloadFeatureSpecializationPart? triggerValuePart"
+      }
+    ]
+  },
+  "32": {
+    "category": "Extension compatibility",
+    "language": [
+      "sysml"
+    ],
+    "summary": "Optional `usageDeclaration` in for-loop variables",
+    "description": "Made `usageDeclaration` optional in `forVariableDeclarationMember` and `forVariableDeclaration`.",
+    "comment": "Fix 32: Make usageDeclaration optional in for-loop variable declarations.",
+    "replace": [
+      {
+        "old": "forVariableDeclarationMember\n    : usageDeclaration\n    ;",
+        "new": "forVariableDeclarationMember\n    : usageDeclaration?\n    ;"
+      },
+      {
+        "old": "forVariableDeclaration\n    : usageDeclaration\n    ;",
+        "new": "forVariableDeclaration\n    : usageDeclaration?\n    ;"
+      }
+    ]
+  },
+  "33": {
+    "category": "Extension compatibility",
+    "language": [
+      "sysml"
+    ],
+    "summary": "Optional `usageDeclaration` in state/transition rules",
+    "description": "Made `usageDeclaration` optional in succession, exhibit state, and transition declarations.",
+    "comment": "Fix 33: Make usageDeclaration optional in state/transition rules.",
+    "replace": [
+      {
+        "old": "    : ( SUCCESSION usageDeclaration )? FIRST featureChainMember guardExpressionMember THEN transitionSuccessionMember",
+        "new": "    : ( SUCCESSION usageDeclaration? )? FIRST featureChainMember guardExpressionMember THEN transitionSuccessionMember"
+      },
+      {
+        "old": "    : occurrenceUsagePrefix EXHIBIT ( ownedReferenceSubsetting featureSpecializationPart? | STATE usageDeclaration ) valuePart?",
+        "new": "    : occurrenceUsagePrefix EXHIBIT ( ownedReferenceSubsetting featureSpecializationPart? | STATE usageDeclaration? ) valuePart?"
+      },
+      {
+        "old": "    : TRANSITION ( usageDeclaration FIRST )?",
+        "new": "    : TRANSITION ( usageDeclaration? FIRST )?"
+      }
+    ]
+  },
+  "34": {
+    "category": "Extension compatibility",
+    "language": [
+      "sysml"
+    ],
+    "summary": "Optional `usageDeclaration` in constraint/requirement/use case",
+    "description": "Made `usageDeclaration` optional in `constraintUsageDeclaration`, requirement usage, and use case usage declarations.",
+    "comment": "Fix 34: Make usageDeclaration optional in constraint/requirement/usecase.",
+    "replace": [
+      {
+        "old": "constraintUsageDeclaration\n    : usageDeclaration valuePart?\n",
+        "new": "constraintUsageDeclaration\n    : usageDeclaration? valuePart?\n"
+      },
+      {
+        "old": "| REQUIREMENT usageDeclaration ) valuePart?",
+        "new": "| REQUIREMENT usageDeclaration? ) valuePart?"
+      },
+      {
+        "old": "| USE CASE usageDeclaration ) valuePart?",
+        "new": "| USE CASE usageDeclaration? ) valuePart?"
+      }
+    ]
+  },
+  "35": {
+    "category": "Extension compatibility",
+    "language": [
+      "sysml"
+    ],
+    "summary": "Optional `usageDeclaration` in `flowDeclaration`; remove redundant alternative",
+    "description": "Made `usageDeclaration` optional and removed the redundant `flowEndMember TO flowEndMember` alternative (already covered by the preceding alternative with optional parts).",
+    "comment": "Fix 35: flowDeclaration \u2014 make usageDeclaration optional.",
+    "replace": [
+      {
+        "old": "flowDeclaration\n    : featureDeclaration valuePart? ( OF payloadFeatureMember )? ( FROM flowEndMember TO flowEndMember )?\n    | ( ALL )? flowEndMember TO flowEndMember\n    | usageDeclaration valuePart? ( OF flowPayloadFeatureMember )? ( FROM flowEndMember TO flowEndMember )?\n    | flowEndMember TO flowEndMember\n    ;",
+        "new": "flowDeclaration\n    : featureDeclaration valuePart? ( OF payloadFeatureMember )? ( FROM flowEndMember TO flowEndMember )?\n    | ( ALL )? flowEndMember TO flowEndMember\n    | usageDeclaration? valuePart? ( OF flowPayloadFeatureMember )? ( FROM flowEndMember TO flowEndMember )?\n    ;"
+      }
+    ]
+  },
+  "38": {
+    "category": "ANTLR warning suppression",
+    "language": [
+      "sysml"
+    ],
+    "summary": "Remove redundant `?`/`*` on epsilon-capable sub-rules (warning 154)",
+    "description": "ANTLR warning(154) fires when an optional block `(\u2026)?` or `(\u2026)*` contains an alternative that can already match the empty string. Removed redundant markers in `featurePrefix`, `resultExpressionMember`, `endUsagePrefix`, `sendNode`, `returnParameterMember`, `requirementConstraintMember`, and `framedConcernMember`.",
+    "comment": "(Former Fix 36 \"Simplify payloadFeature alternatives\" and Fix 37 \"Remove redundant payloadFeatureSpecializationPart alternative\" removed: obsolete as of the OMG 2026-05 release.\nUpstream normalized `( FeatureSpecialization )+` to `FeatureSpecialization+`, so the generated rules no longer contain the redundant alternatives these patches targeted.)\nANTLR warning(154) fixes (Fix 38)\nFix 38a\u2013g: Remove redundant ?/* on epsilon-capable sub-rules.",
+    "replace": [
+      {
+        "old": "    : ( endFeaturePrefix ( ownedCrossFeatureMember )? | basicFeaturePrefix )",
+        "new": "    : ( endFeaturePrefix ownedCrossFeatureMember | basicFeaturePrefix )"
+      },
+      {
+        "old": "resultExpressionMember\n    : memberPrefix? ownedExpression\n    ;",
+        "new": "resultExpressionMember\n    : memberPrefix ownedExpression\n    ;"
+      },
+      {
+        "old": "endUsagePrefix\n    : END ( ownedCrossFeatureMember )?\n    ;",
+        "new": "endUsagePrefix\n    : END ownedCrossFeatureMember\n    ;"
+      },
+      {
+        "old": ")? SEND ( nodeParameterMember senderReceiverPart? | emptyParameterMember senderReceiverPart )? actionBody",
+        "new": ") SEND ( nodeParameterMember senderReceiverPart? | emptyParameterMember senderReceiverPart ) actionBody"
+      },
+      {
+        "old": "returnParameterMember\n    : memberPrefix? RETURN usageElement\n    ;",
+        "new": "returnParameterMember\n    : memberPrefix RETURN usageElement\n    ;"
+      },
+      {
+        "old": "requirementConstraintMember\n    : memberPrefix? requirementKind requirementConstraintUsage\n    ;",
+        "new": "requirementConstraintMember\n    : memberPrefix requirementKind requirementConstraintUsage\n    ;"
+      },
+      {
+        "old": "framedConcernMember\n    : memberPrefix? FRAME framedConcernUsage\n    ;",
+        "new": "framedConcernMember\n    : memberPrefix FRAME framedConcernUsage\n    ;"
+      }
+    ]
+  },
+  "39": {
+    "category": "Target compatibility",
+    "language": [
+      "sysml",
+      "kerml"
+    ],
+    "summary": "Rename `empty*` rules for Go target compatibility",
+    "description": "The Go ANTLR runtime generates exported methods from rule names. Rules named `empty*` collide with Go identifiers. Appended `_` to: `emptyFeature` \u2192 `emptyFeature_`, `emptyMultiplicity` \u2192 `emptyMultiplicity_`, `emptyUsage` \u2192 `emptyUsage_`, `emptyActionUsage` \u2192 `emptyActionUsage_`.",
+    "comment": "Go target compatibility (Fix 39)",
+    "replace": [
+      {
+        "old": "\nemptyFeature\n",
+        "new": "\nemptyFeature_\n"
+      },
+      {
+        "old": "(?<=\\s)emptyFeature(?=[\\s\\n])",
+        "new": "emptyFeature_",
+        "regex": true
+      },
+      {
+        "old": "\nemptyMultiplicity\n",
+        "new": "\nemptyMultiplicity_\n"
+      },
+      {
+        "old": "(?<=\\s)emptyMultiplicity(?=[\\s\\n])",
+        "new": "emptyMultiplicity_",
+        "regex": true
+      },
+      {
+        "old": "\nemptyUsage\n",
+        "new": "\nemptyUsage_\n"
+      },
+      {
+        "old": "(?<=\\s)emptyUsage(?=[\\s\\n])",
+        "new": "emptyUsage_",
+        "regex": true
+      },
+      {
+        "old": "\nemptyActionUsage\n",
+        "new": "\nemptyActionUsage_\n"
+      },
+      {
+        "old": "(?<=\\s)emptyActionUsage(?=[\\s\\n])",
+        "new": "emptyActionUsage_",
+        "regex": true
+      }
+    ]
+  },
+  "40": {
+    "category": "Conformance fix",
+    "language": [
+      "sysml"
+    ],
+    "summary": "Add `endOccurrenceUsageElement` for `end [mult] port/item/part`",
+    "description": "Official SysML v2 training and validation models use `end [1] port p : P`, `end [0..1] item c : C`, and `end port sp : OutPort` inside connection, interface, and flow definition bodies. Added `endOccurrenceUsageElement : END (ownedCrossMultiplicityMember)? occurrenceUsageElement` and referenced it from `definitionBodyItem` and `interfaceOccurrenceUsageElement`.",
+    "comment": "Conformance fixes (Fix 40\u201341)\nFix 40: Add endOccurrenceUsageElement for 'end [mult] port/item/part'.\nOfficial SysML v2 training/validation models use patterns like: end [1] port p : P; end [0..1] item c : C; end port sp : OutPort;\nThe existing grammar only handles 'end :>> name' (via endFeatureUsage) and bare 'end usage' (via defaultInterfaceEnd).\nThis adds support for 'end' + optional multiplicity + occurrence keyword.\nAdd the new rule after nonOccurrenceUsageElement\nAdd endOccurrenceUsageElement to definitionBodyItem\nAdd endOccurrenceUsageElement to interfaceOccurrenceUsageElement",
+    "replace": [
+      {
+        "old": "nonOccurrenceUsageElement\n    : referenceUsage\n    | endFeatureUsage\n    | attributeUsage\n    | enumerationUsage\n    | bindingConnectorAsUsage\n    | successionAsUsage\n    | extendedUsage\n    | defaultReferenceUsage\n    ;",
+        "new": "nonOccurrenceUsageElement\n    : referenceUsage\n    | endFeatureUsage\n    | attributeUsage\n    | enumerationUsage\n    | bindingConnectorAsUsage\n    | successionAsUsage\n    | extendedUsage\n    | defaultReferenceUsage\n    ;\n\n// end [multiplicity] <occurrence-keyword> \u2014 e.g. end [1] port p : P;\n// The END keyword marks a feature as a connection/interface/flow endpoint.\n// The optional multiplicity constrains the end feature cardinality.\nendOccurrenceUsageElement\n    : END ( ownedCrossMultiplicityMember )? occurrenceUsageElement\n    ;"
+      },
+      {
+        "old": "definitionBodyItem\n    : importRule\n    | memberPrefix definitionBodyItemContent\n    | ( sourceSuccessionMember )? memberPrefix occurrenceUsageElement\n    ;",
+        "new": "definitionBodyItem\n    : importRule\n    | memberPrefix definitionBodyItemContent\n    | ( sourceSuccessionMember )? memberPrefix endOccurrenceUsageElement\n    | ( sourceSuccessionMember )? memberPrefix occurrenceUsageElement\n    ;"
+      },
+      {
+        "old": "interfaceOccurrenceUsageElement\n    : defaultInterfaceEnd\n    | structureUsageElement\n    | behaviorUsageElement\n    ;",
+        "new": "interfaceOccurrenceUsageElement\n    : defaultInterfaceEnd\n    | endOccurrenceUsageElement\n    | structureUsageElement\n    | behaviorUsageElement\n    ;"
+      }
+    ]
+  },
+  "41": {
+    "category": "Conformance fix",
+    "language": [
+      "sysml"
+    ],
+    "summary": "Allow bare `NOT SATISFY` without `ASSERT` prefix",
+    "description": "The official OMG example `RequirementTest.sysml` uses `not satisfy r1 by p;` without an `assert` prefix. Fix 3 made `NOT` optional inside `ASSERT (NOT)?`, and Fix 7 made `ASSERT` optional, but `( ASSERT ( NOT )? )?` does not allow bare `NOT SATISFY`. Changed to `( ASSERT ( NOT )? | NOT )?`.",
+    "comment": "Fix 41: Allow bare 'not satisfy' without 'assert' prefix.\nThe official OMG example RequirementTest.sysml uses 'not satisfy r1 by p;' without an 'assert' prefix.\nFix 3 made NOT optional inside ASSERT (NOT)?, and Fix 7 made ASSERT optional, but the combination ( ASSERT ( NOT )? )? does not allow bare NOT SATISFY.\nChange to ( ASSERT ( NOT )? | NOT )?.",
+    "replace": [
+      {
+        "old": "( ASSERT ( NOT )? )? SATISFY",
+        "new": "( ASSERT ( NOT )? | NOT )? SATISFY"
+      }
+    ]
+  },
+  "42": {
+    "category": "Conformance fix",
+    "language": [
+      "sysml",
+      "kerml"
+    ],
+    "summary": "Handle `//*..*/` block comments in `REGULAR_COMMENT` lexer rule",
+    "description": "Official OMG SysML v2 training/validation files use `//* ... */` to comment out code blocks. `REGULAR_COMMENT` is `'/*' .*? '*/' | '//*' .*? '*/'`, so it also matches the `//*` form. ANTLR's longest match makes `REGULAR_COMMENT` win over `SINGLE_LINE_NOTE` for a `//* ... */`.",
+    "rules": "REGULAR_COMMENT (lexer rule)",
+    "comment": "Fix 42: //* ... */ block comment (lexer-level, handled in generate_lexer).\nRecord the patch for documentation.",
+    "applied": true
+  },
+  "43": {
+    "category": "Conformance fix",
+    "language": [
+      "sysml"
+    ],
+    "summary": "Allow optional name and `nonunique` in `endOccurrenceUsageElement`",
+    "description": "Official OMG standard library and examples use `end theCauses [*] occurrence theCause :> causes`, `end inCart[0..1] item cart : ShoppingCart`, and `end [0..*] nonunique item selectedProduct`. Added optional `name` after END and optional `NONUNIQUE` before the occurrence keyword.",
+    "comment": "Fix 43: Expand endOccurrenceUsageElement to handle named ends.\nOfficial files use: end theCauses [*] occurrence theCause :> causes :>> source { ... } end inCart[0..1] item cart : ShoppingCart[1]; end [0..*] nonunique item selectedProduct : Product[1]; Fix 40 added `END (mult)? occurrenceUsageElement` but occurrenceUsageElement already includes usagePrefix which has basicUsagePrefix (with no END).\nWe need to also allow an optional name before the multiplicity.",
+    "replace": [
+      {
+        "old": "endOccurrenceUsageElement\n    : END ( ownedCrossMultiplicityMember )? occurrenceUsageElement\n    ;",
+        "new": "endOccurrenceUsageElement\n    : END ( name )? ( ownedCrossMultiplicityMember )? ( NONUNIQUE )? occurrenceUsageElement\n    ;"
+      }
+    ]
+  },
+  "44": {
+    "category": "Conformance fix",
+    "language": [
+      "sysml"
+    ],
+    "summary": "Allow keywords as names in name positions",
+    "description": "The OMG standard library uses keywords as identifiers: `attribute type : String` (ImageMetadata), `alias multiplicity for degeneracy` (ISQChemistryMolecular), `attribute <var> ...` (SI), and `subsets step`, `redefines behavior`, `subsets feature`, `redefines function`, `subsets member`, `redefines predicate` (SysML.sysml). Added `unreservedKeyword` alternative to the `name` rule.",
+    "comment": "Fix 44: Allow certain keywords as names.\nThe OMG standard library uses reserved keywords in name positions: attribute type : String  (ImageMetadata.sysml) alias multiplicity for degeneracy  (ISQChemistryMolecular.sysml) attribute <var> 'volt ampere reactive' : PowerUnit  (SI.sysml) protected ref var[0..1] :> seq  (Actions.sysml)\nExpand the name rule to accept these keywords as identifiers.",
+    "replace": [
+      {
+        "old": "name\n    : IDENTIFIER\n    | STRING\n    ;",
+        "new": "name\n    : IDENTIFIER\n    | STRING\n    | unreservedKeyword\n    ;\n\n// Keywords that appear as names in the official OMG standard library.\n// These are contextually unreserved \u2014 valid as identifiers in name positions.\nunreservedKeyword\n    : TYPE\n    | MULTIPLICITY\n    | VAR\n    | LANGUAGE\n    | LOCALE\n    | CROSSES\n    | STEP\n    | FEATURE\n    | BEHAVIOR\n    | FUNCTION\n    | MEMBER\n    | PREDICATE\n    | INTERACTION\n    | METACLASS\n    ;"
+      }
+    ]
+  },
+  "45": {
+    "category": "Conformance fix",
+    "language": [
+      "sysml"
+    ],
+    "summary": "Reorder `actionNodeMember` before `behaviorUsageMember` in `actionBehaviorMember`",
+    "description": "The official ActionTest.sysml uses `action snd send { ... }`. Previously `behaviorUsageMember` (via `actionUsage`) matched `action snd` first and then failed on `send`. Moving `actionNodeMember` before `behaviorUsageMember` in `actionBehaviorMember` lets the parser try the send-node interpretation first.",
+    "comment": "Fix 45: Allow 'action name send { ... }' syntax.\nActionTest.sysml uses 'action snd send { in :>> payload = s; }'\nThis is an action usage whose name is 'snd' followed by the 'send' node keyword.\nCurrently sendNode expects occurrenceUsagePrefix first, but the parser sees 'action snd' as actionUsage and then 'send' is unexpected.\nFix: add SEND as an alternative in actionUsage's body pattern.\nActually the real structure is: actionUsage : occurrenceUsagePrefix ACTION actionUsageDeclaration? actionBody where actionUsageDeclaration can be usageDeclaration (name + specialization).\nAfter 'action snd', the parser expects actionBody or specialization, but sees 'send'.\nThe issue is that 'action snd send' should parse as a send action node with name 'snd'.\nsendNode : occurrenceUsagePrefix (actionNodeUsageDeclaration | actionUsageDeclaration) SEND ...\nSo 'action snd send { ... }' should work if actionUsage dispatches to sendNode when SEND follows the name.\nBut actionUsage and sendNode are separate alternatives.\nFix: ensure actionBodyItem tries sendNode before plain actionUsage when the name is followed by SEND.\nActually checking the grammar more carefully: actionBodyItem tries each alternative.\nsendNode has occurrenceUsagePrefix ACTION? usageDeclaration? SEND ...\nSo 'action snd send {' should match sendNode with prefix=action, name=snd, SEND keyword.\nLet's check: actionNodeUsageDeclaration : (ACTION usageDeclaration?)?\nSo ACTION is optional in actionNodeUsageDeclaration, meaning sendNode : occurrenceUsagePrefix (ACTION usageDeclaration?)? SEND ...\nFor 'action snd send {in :>> ...}': occurrenceUsagePrefix = empty ACTION usageDeclaration(name=snd) SEND nodeParameterMember ...\nBut sendNode needs: occurrenceUsagePrefix (actionNodeUsageDeclaration | actionUsageDeclaration) SEND ... actionNodeUsageDeclaration = (ACTION usageDeclaration?)?\nThis should match!\nThe issue might be ordering.\nLet me check how it's invoked from actionBodyItem.\nsendNode is under actionBodyItem via the sendNode alternative.\nActually, re-examining: the problem is that actionBodyItem tries actionUsage BEFORE sendNode.\nactionUsage matches 'action snd' and then expects actionBody but finds 'send' keyword which isn't valid there.\nFix: In actionBodyItem, move sendNode/sendNodeDeclaration alternatives BEFORE actionUsage.",
+    "replace": [
+      {
+        "old": "actionBehaviorMember\n    : behaviorUsageMember\n    | actionNodeMember\n    ;",
+        "new": "actionBehaviorMember\n    : actionNodeMember\n    | behaviorUsageMember\n    ;"
+      }
+    ]
+  },
+  "46": {
+    "category": "Conformance fix",
+    "language": [
+      "sysml"
+    ],
+    "summary": "Track cascading parse errors in `SysML.sysml` metadata defs",
+    "description": "SysML.sysml contains chained `subsets` and `redefines` patterns inside sequential `metadata def` blocks (e.g. `subsets step, usage subsets Metadata::metadataItems`). These fail due to ANTLR error recovery from earlier constructs, not a missing grammar rule. Individual patterns parse correctly. Resolves when all other conformance fixes are applied.",
+    "rules": "(cascading \u2014 no rule change needed)",
+    "comment": "Fix 46: The SysML.sysml standard library file has cascading errors that only manifest when multiple metadata def blocks with complex specialization patterns are parsed in sequence.\nThese are not caused by a single missing grammar rule but by ANTLR error recovery consuming tokens in earlier constructs.\nWith the other conformance fixes applied, these should resolve.\nThis is a documentation-only patch entry.",
+    "applied": true
+  },
+  "47": {
+    "category": "Conformance fix",
+    "language": [
+      "sysml"
+    ],
+    "summary": "Allow `send` without inline payload/receiver in `sendNode`",
+    "description": "ActionTest.sysml uses `action snd send { in :>> payload = s; }` where the payload is specified inside the body. The `sendNode` rule required either `nodeParameterMember` or `emptyParameterMember senderReceiverPart` after SEND, but the second branch mandated `senderReceiverPart` (VIA/TO). Made it optional.",
+    "comment": "Fix 47: Allow bare 'send' without payload/receiver in sendNode.\nActionTest.sysml uses 'action snd send { in :>> payload = s; }' where the payload is specified inside the body rather than inline.\nThe sendNode rule requires either nodeParameterMember or emptyParameterMember+senderReceiverPart after SEND, but the second alternative mandates senderReceiverPart (VIA/TO).\nFix: make senderReceiverPart optional in the second sendNode branch.",
+    "replace": [
+      {
+        "old": "SEND ( nodeParameterMember senderReceiverPart? | emptyParameterMember senderReceiverPart ) actionBody",
+        "new": "SEND ( nodeParameterMember senderReceiverPart? | emptyParameterMember senderReceiverPart? ) actionBody"
+      }
+    ]
+  },
+  "48": {
+    "category": "Conformance fix",
+    "language": [
+      "sysml"
+    ],
+    "summary": "Allow prefix metadata annotations on enumeration value members",
+    "description": "MetadataTest.sysml uses `#Security enum secret : ClassificationLevel = 2;` inside an enum def body. The `enumerationUsageMember` rule only allowed `memberPrefix enumeratedValue`, without prefix metadata support. Added `( prefixMetadataMember )*` to allow metadata annotations like `#Security`.",
+    "comment": "Fix 48: Allow prefix metadata on enum value members.\nMetadataTest.sysml uses '#Security enum secret : ClassificationLevel = 2;'\nThe enumerationUsageMember rule only allows memberPrefix (visibility), not prefixMetadataMember.\nAdd support for prefix metadata annotations.",
+    "replace": [
+      {
+        "old": "enumerationUsageMember\n    : memberPrefix enumeratedValue\n    ;",
+        "new": "enumerationUsageMember\n    : ( prefixMetadataMember )* memberPrefix enumeratedValue\n    ;"
+      }
+    ]
+  },
+  "49": {
+    "category": "Conformance fix",
+    "language": [
+      "sysml"
+    ],
+    "summary": "Allow `REF` in body parameter declarations for `{in ref ...}` blocks",
+    "description": "TradeStudies, 7b-Variant Configurations, and 15_05-Unification use `->forAll {in ref w; ...}` and `->selectOne {in ref a { ... } ...}`. The `feature` rule uses `basicFeaturePrefix featureDeclaration` but `basicFeaturePrefix` has no `REF` keyword. Added optional `( REF )?` between `basicFeaturePrefix` and `featureDeclaration`.",
+    "comment": "Fix 49: Allow 'in ref' in bodyExpression parameter declarations.\nTradeStudies, 7b-Variant, and 15_05-Unification use patterns like: x->forAll {in ref w; predicate} alternatives->selectOne {in ref a { ... } objective(selectedAlternative = a)} bodyExpression \u2192 functionBodyPart \u2192 typeBodyElement \u2192 featureMember \u2192 ownedFeatureMember \u2192 memberPrefix featureElement \u2192 feature feature uses basicFeaturePrefix which has (featureDirection)? but no REF.\nThe feature rule accepts: basicFeaturePrefix featureDeclaration.\nAdding optional REF after basicFeaturePrefix in feature allows 'in ref w;' to parse as featureDirection=IN, REF, featureDeclaration=w.",
+    "replace": [
+      {
+        "old": "    : ( featurePrefix ( FEATURE | prefixMetadataMember ) featureDeclaration? | ( endFeaturePrefix | basicFeaturePrefix ) featureDeclaration ) valuePart? typeBody",
+        "new": "    : ( featurePrefix ( FEATURE | prefixMetadataMember ) featureDeclaration? | ( endFeaturePrefix | basicFeaturePrefix ) ( REF )? featureDeclaration ) valuePart? typeBody"
+      }
+    ]
+  },
+  "50": {
+    "category": "Conformance fix",
+    "language": [
+      "sysml",
+      "kerml"
+    ],
+    "summary": "Allow `REGULAR_COMMENT` as a no-op expression in `baseExpression`",
+    "description": "Analysis Case Usage Example.sysml uses `= ( //* ... */ )` where the entire expression is a commented-out placeholder. After Fix 42 unified `//*` into `REGULAR_COMMENT`, the token appears inside parenthesized expressions. Added `REGULAR_COMMENT` as an alternative in `baseExpression`.",
+    "comment": "Fix 50: Allow REGULAR_COMMENT inside parenthesized expressions.\nAnalysis Case Usage Example.sysml uses `= ( //* ... */ )` where the block comment is the entire value (commented-out placeholder).\nAfter Fix 42 merged //* into REGULAR_COMMENT, the token appears inside the expression.\nMake baseExpression accept and ignore REGULAR_COMMENT in parenthesized position.",
+    "replace": [
+      {
+        "old": "baseExpression\n    : nullExpression\n    | literalExpression\n",
+        "new": "baseExpression\n    : nullExpression\n    | REGULAR_COMMENT   // ignore block comments used as expression placeholders\n    | literalExpression\n"
+      }
+    ]
+  },
+  "51": {
+    "category": "Conformance fix",
+    "language": [
+      "sysml"
+    ],
+    "summary": "Allow `definitionBodyItem` in `functionBodyPart` for body expressions",
+    "description": "VehicleGeometryAndCoordinateFrames.sysml uses `private attribute` inside a `->forAll { ... }` body expression. The `functionBodyPart` rule only allowed `typeBodyElement` which routes through `featureMember` \u2014 too limited for usage elements like `attributeUsage` with visibility modifiers. Added `definitionBodyItem` as an alternative.",
+    "comment": "Fix 51: Allow visibility modifiers (private/protected) in body expressions.\nVehicleGeometryAndCoordinateFrames.sysml uses `private attribute` inside a `->forAll { ... }` body expression via functionBodyPart \u2192 typeBodyElement \u2192 featureMember \u2192 ownedFeatureMember \u2192 memberPrefix featureElement.\nThe memberPrefix rule is (visibilityIndicator)? which should already handle 'private'.\nBut the issue is that inside a bodyExpression, functionBodyPart uses typeBodyElement which dispatches through ownedFeatureMember \u2192 memberPrefix featureElement \u2192 feature.\nThe 'feature' rule's second alternative starts with basicFeaturePrefix which begins with (featureDirection)?.\nWhen the parser sees 'private', it goes to memberPrefix(PRIVATE) then expects featureElement.\nThe 'attribute' keyword routes to attributeDefinition/attributeUsage but those are under definitionElement/usageElement, NOT featureElement.\nThe fix: add definitionBodyItem-like dispatch to typeBodyElement.\nActually typeBody already has typeBodyElement which includes featureMember.\nThe issue is that attributeUsage etc. are not under featureMember \u2014 they're under definitionBodyItemContent.\nThe simplest fix: functionBodyPart should also accept definitionBodyItem.",
+    "replace": [
+      {
+        "old": "functionBodyPart\n    : ( typeBodyElement | returnFeatureMember )* ( resultExpressionMember )?",
+        "new": "functionBodyPart\n    : ( definitionBodyItem | typeBodyElement | returnFeatureMember )* ( resultExpressionMember )?"
+      }
+    ]
+  },
+  "53": {
+    "category": "Extension",
+    "language": [
+      "sysml",
+      "kerml"
+    ],
+    "summary": "Add metadata cast expression `(as Type)` to `baseExpression`",
+    "description": "Skipped because the direct ``AS`` classification alternative covers the same parenthesized form without a duplicate base production.",
+    "rules": "baseExpression",
+    "comment": "Fix 53 is intentionally skipped: the direct ``AS`` classification alternative already covers ``(as Type)`` without a duplicate base production or an exact ambiguity.",
+    "applied": false
+  },
+  "54": {
+    "category": "Conformance fix",
+    "language": [
+      "sysml"
+    ],
+    "summary": "Allow typed ends in shared non-behavior body items",
+    "description": "The 2026-09 library declares `end occurrence source/target` inside `Flows::messages`, an action usage. Formal SysML 2.0 8.2.2.6.2 defines `EndUsagePrefix`, but 8.2.2.9.2 and 8.2.2.17 do not admit it on occurrence usages in `NonBehaviorBodyItem`. The [Pilot's `OccurrenceUsagePrefix`](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/blob/a9676a3c4825201b270b59289bf284154842bde1/org.omg.sysml.xtext/src/org/omg/sysml/xtext/SysML.xtext#L836-L843) does admit `EndUsagePrefix`. This intentional BNF compatibility extension reuses `endOccurrenceUsageElement` from Fixes 40/43, with the same visibility and optional source-succession prefix as ordinary structure members. It applies to all shared body contexts, not just the `messages` declaration. Tracked in [PR #18](https://github.com/daltskin/sysml-v2-grammar/pull/18). Remove this alternative when the upstream BNF supplies an equivalent typed-end route, retaining the positive/negative regressions in `scripts/EndOccurrenceGrammarTest.py`. Generation fails visibly if the expected upstream body rule changes.",
+    "comment": "Fix 54: SysML 2.0 8.2.2.17 omits typed ends from NonBehaviorBodyItem, unlike the Pilot's OccurrenceUsagePrefix and 2026-09 Flows::messages.\nReuse Fix 40's end syntax; track/remove this BNF departure in PR #18.",
+    "expect_once": "Fix 54: NonBehaviorBodyItem has changed; review the upstream end-occurrence syntax before updating this compatibility patch.",
+    "replace": [
+      {
+        "old": "nonBehaviorBodyItem\n    : importRule\n    | aliasMember\n    | definitionMember\n    | variantUsageMember\n    | nonOccurrenceUsageMember\n    | ( sourceSuccessionMember )? structureUsageMember\n    ;",
+        "new": "nonBehaviorBodyItem\n    : importRule\n    | aliasMember\n    | definitionMember\n    | variantUsageMember\n    | nonOccurrenceUsageMember\n    | ( sourceSuccessionMember )? memberPrefix endOccurrenceUsageElement\n    | ( sourceSuccessionMember )? structureUsageMember\n    ;"
+      }
+    ]
+  },
+  "55": {
+    "category": "Spec BNF fix",
+    "language": [
+      "kerml"
+    ],
+    "summary": "Optional `featureDeclaration` in `invariant`",
+    "description": "KerML 7.4.8.5 declares invariants without a feature declaration (`inv { fuelLevel >= 0 & fuelLevel <= maxFuelLevel }`, `inv false { fuelLevel > maxFuelLevel }`), as the Kernel Semantic Library does (`Occurrences.kerml`, `StatePerformances.kerml`, ...), but the KEBNF `Invariant` production requires `FeatureDeclaration`. Made it optional.",
+    "comment": "Fix 55: KerML 7.4.8.5 declares invariants without a feature declaration (`inv { ... }`, `inv false { ... }`), which the KEBNF `Invariant` production omits by requiring `FeatureDeclaration`.",
+    "replace": [
+      {
+        "old": "invariant\n    : featurePrefix INV ( TRUE | FALSE )? featureDeclaration valuePart? functionBody",
+        "new": "invariant\n    : featurePrefix INV ( TRUE | FALSE )? featureDeclaration? valuePart? functionBody"
+      }
+    ]
+  },
+  "57": {
+    "category": "Conformance fix",
+    "language": [
+      "kerml"
+    ],
+    "summary": "`rootNamespace` is the whole text (`EOF`)",
+    "description": "Every valid KerML text is parsed starting from the `RootNamespace` production (KerML 8.2.3.4.1, Note 1), whose body is the list of the text's top-level elements (KerML 7.2.5.3). The KEBNF production has no end-of-input marker, so the generated `rootNamespace` stops, without an error, before the first input it can't match, and the rest of the text is neither parsed nor reported. Added `EOF` after `namespaceBodyElement*`; what the production matches is unchanged.",
+    "comment": "Fix 57: KerML 8.2.3.4.1 Note 1: a text is parsed from RootNamespace as a whole, so rootNamespace ends at EOF.",
+    "expect_once": "Fix 57: RootNamespace has changed; review the upstream production before updating this patch.",
+    "replace": [
+      {
+        "old": "rootNamespace\n    : namespaceBodyElement*\n    ;",
+        "new": "rootNamespace\n    : namespaceBodyElement* EOF\n    ;"
+      }
+    ]
+  },
+  "58": {
+    "category": "Extension compatibility",
+    "language": [
+      "kerml"
+    ],
+    "summary": "Optional `identification` in `payloadFeature`",
+    "description": "A flow's payload may be anonymous: the `Identification` of `PayloadFeature` may be empty (KerML 8.2.5.9.2, 8.2.3.1), as in `flow f of : C;`. With Fix 13 requiring a name or short name in `identification`, made it optional in the two alternatives that start with it. SysML's own `PayloadFeature` production already has an optional `Identification` (SysML 8.2.2.16), so the SysML grammar is unchanged.",
+    "comment": "Fix 58: KerML 8.2.5.9.2: a payload feature may be anonymous, so identification is optional in payloadFeature after Fix 13.",
+    "replace": [
+      {
+        "old": "payloadFeature\n    : identification payloadFeatureSpecializationPart valuePart?\n    | identification valuePart\n",
+        "new": "payloadFeature\n    : identification? payloadFeatureSpecializationPart valuePart?\n    | identification? valuePart\n"
+      }
+    ]
+  },
+  "52": {
+    "category": "Dead rule removal",
+    "language": [
+      "sysml",
+      "kerml"
+    ],
+    "summary": "Remove {count} unreachable parser rules",
+    "description": "Removed {count} parser rules unreachable from `rootNamespace`: definitions that other fixes left behind, or that no production references.",
+    "rules": "({count} rules removed)",
+    "comment": "Fix 52: Remove unreachable parser rules\nThese rules exist in the KEBNF for metamodel type annotations but are unreachable from rootNamespace in the ANTLR4 grammar.\nThey fall into: - Merged rules (syntax folded into other rules by Fixes 11/22) - Feature chain rules (merged into qualifiedName patterns) - Metamodel wrapper passthroughs (no ANTLR4 equivalent)\nMatch rule definition: name on its own line, followed by : and body ending with ; Collapse runs of 3+ blank lines left by removals",
+    "remove_unreachable_rules": true
+  }
+}

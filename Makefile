@@ -1,4 +1,4 @@
-.PHONY: help install generate sdk sdk-archive test test-examples lint format clean ci update-conformance contrib version bump-revision
+.PHONY: help install generate generate-sysml generate-kerml sdk sdk-archive test test-examples lint format clean ci update-conformance contrib version bump-revision
 
 PYTHON     ?= python3
 PIP        ?= pip
@@ -33,11 +33,16 @@ $(ANTLR_JAR):
 # Generate
 # ---------------------------------------------------------------------------
 
-generate: ## Regenerate ANTLR4 grammar from OMG spec
-	$(PYTHON) scripts/generate_grammar.py $(if $(TAG),--tag $(TAG)) --cache
+generate: generate-sysml generate-kerml ## Regenerate the SysML and KerML grammars from the OMG spec
 
-sdk: $(ANTLR_JAR) ## Generate ANTLR4 SDKs (all targets, or set LANGUAGE=Cpp)
-	$(PYTHON) scripts/generate_sdks.py --jobs $(SDK_JOBS) $(if $(LANGUAGE),--language $(LANGUAGE))
+generate-sysml: ## Regenerate the SysML ANTLR4 grammar
+	$(PYTHON) scripts/generate_grammar.py --language sysml $(if $(TAG),--tag $(TAG)) --cache
+
+generate-kerml: ## Regenerate the KerML ANTLR4 grammar
+	$(PYTHON) scripts/generate_grammar.py --language kerml $(if $(TAG),--tag $(TAG)) --cache
+
+sdk: $(ANTLR_JAR) ## Generate ANTLR4 SDKs (all targets, or set LANGUAGE=Cpp; both grammars, or GRAMMAR=kerml)
+	$(PYTHON) scripts/generate_sdks.py --jobs $(SDK_JOBS) $(if $(LANGUAGE),--language $(LANGUAGE)) $(if $(GRAMMAR),--grammar $(GRAMMAR))
 
 sdk-archive: $(ANTLR_JAR) ## Generate all ANTLR4 SDKs and package a release zip
 	$(PYTHON) scripts/generate_sdks.py --archive --jobs $(SDK_JOBS)
@@ -49,7 +54,10 @@ sdk-archive: $(ANTLR_JAR) ## Generate all ANTLR4 SDKs and package a release zip
 test: $(ANTLR_JAR) ## Validate grammar, parse examples, run conformance
 	bash scripts/UpstreamReleaseTest.sh
 	$(PYTHON) scripts/ConformanceFetchTest.py
+	$(PYTHON) scripts/ConformanceRunnerTest.py
 	$(PYTHON) scripts/ExampleRunnerTest.py
+	$(PYTHON) scripts/PatchTest.py
+	$(PYTHON) scripts/SdkGenerationTest.py
 	@echo "── Compiling grammar (Java target) ──"
 	@mkdir -p $(BUILD_DIR)/antlr-out
 	java -jar $(ANTLR_JAR) -Dlanguage=Java -o $(BUILD_DIR)/antlr-out \
@@ -68,6 +76,23 @@ test: $(ANTLR_JAR) ## Validate grammar, parse examples, run conformance
 	@echo "── Running end-occurrence regressions (Python target) ──"
 	PYTHONPATH="$(CURDIR)/$(BUILD_DIR)/antlr-python" $(PYTHON) scripts/EndOccurrenceGrammarTest.py
 	@echo ""
+	@echo "── Compiling KerML grammar (Java target) ──"
+	@mkdir -p $(BUILD_DIR)/antlr-out-kerml/grammar
+	java -jar $(ANTLR_JAR) -Dlanguage=Java -o $(BUILD_DIR)/antlr-out-kerml \
+		-lib $(BUILD_DIR)/antlr-out-kerml/grammar grammar/KerMLLexer.g4 grammar/KerMLParser.g4
+	@echo "✅ KerML grammar compiles"
+	@echo ""
+	@echo "── Running KerML grammar regressions (Python target) ──"
+	@mkdir -p $(BUILD_DIR)/antlr-python-kerml/grammar
+	java -jar $(ANTLR_JAR) -Dlanguage=Python3 -o $(BUILD_DIR)/antlr-python-kerml \
+		-lib $(BUILD_DIR)/antlr-python-kerml/grammar grammar/KerMLLexer.g4 grammar/KerMLParser.g4
+	PYTHONPATH="$(CURDIR)/$(BUILD_DIR)/antlr-python-kerml" $(PYTHON) scripts/KerMLGrammarTest.py
+	@echo ""
+	@echo "── Running lexical structure regressions, both grammars (Python target) ──"
+	SYSML_PYTHON_DIR="$(CURDIR)/$(BUILD_DIR)/antlr-python/grammar" \
+		KERML_PYTHON_DIR="$(CURDIR)/$(BUILD_DIR)/antlr-python-kerml/grammar" \
+		$(PYTHON) scripts/LexicalStructureTest.py
+	@echo ""
 	@echo "── Parsing example files (Java target) ──"
 	@mkdir -p $(BUILD_DIR)/antlr-test
 	java -jar $(ANTLR_JAR) -Dlanguage=Java -o $(BUILD_DIR)/antlr-test \
@@ -75,9 +100,12 @@ test: $(ANTLR_JAR) ## Validate grammar, parse examples, run conformance
 	cd $(BUILD_DIR)/antlr-test/grammar && javac -cp "$(CURDIR)/$(ANTLR_JAR):." *.java
 	$(MAKE) test-examples
 	@echo ""
-	@if [ -d test/fixtures/conformance/training ]; then \
+	@if [ -d test/fixtures/conformance/training ] && [ -d test/fixtures/kerml-conformance/examples ]; then \
 		echo "── Running conformance tests ──"; \
 		$(PYTHON) scripts/conformance.py --verbose; \
+	elif [ -d test/fixtures/conformance/training ] || [ -d test/fixtures/kerml-conformance/examples ]; then \
+		echo "❌ Only one language's conformance fixtures found (run 'make update-conformance' to fetch both)"; \
+		exit 1; \
 	else \
 		echo "── Conformance fixtures not found (run 'make update-conformance' to fetch) ──"; \
 	fi
@@ -97,7 +125,7 @@ test-examples:
 	echo ""; echo "  Results: $$PASS passed, $$FAIL failed"; \
 	[ $$FAIL -eq 0 ]
 
-update-conformance: ## Fetch fixtures + standard library from the configured OMG release
+update-conformance: ## Fetch the SysML and KerML fixtures + standard library from the configured OMG releases
 	$(PYTHON) scripts/conformance.py --fetch
 
 # ---------------------------------------------------------------------------
