@@ -759,8 +759,8 @@ payloadFeatureMember
     ;
 
 payloadFeature
-    : identification payloadFeatureSpecializationPart valuePart?
-    | identification valuePart
+    : identification? payloadFeatureSpecializationPart valuePart?
+    | identification? valuePart
     | ownedFeatureTyping ( ownedMultiplicity )?
     | ownedMultiplicity ownedFeatureTyping
     ;
@@ -900,8 +900,4 @@ filterPackageImportDeclaration
 namespaceImportDirect
     : qualifiedName COLON_COLON STAR ( COLON_COLON STAR_STAR )?
     ;
-
-// ===== Stub rules for undefined references =====
-// These rules are referenced in the spec but not fully defined.
-// They need manual review and completion.
 

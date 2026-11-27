@@ -5,9 +5,9 @@ OMG KerML KEBNF specification when translated to ANTLR4.
 
 - **Grammar version**: `2026.09.1`
 - **OMG release**: `2026-09.1`
-- **Total patches**: 21
-- **Applied**: 15
-- **Skipped**: 6
+- **Total patches**: 17
+- **Applied**: 16
+- **Skipped**: 1
 
 ## Expression scope ledger
 
@@ -33,7 +33,7 @@ Non-empty `functionBodyPart` ambiguity is inherited from the base grammar and re
 
 ### Fix 4: Make `STANDARD` optional in `libraryPackage`
 
-Same `?=` boolean assignment issue as Fix 3.
+The KEBNF uses `isStandard ?= 'standard'` without an explicit `?`, but a `?=` boolean assignment is optional: KerML 7.4.14's example `library package AddressBooks` has no `standard`.
 
 **Affected rules**: libraryPackage
 
@@ -47,21 +47,14 @@ KerML 7.4.8.5 declares invariants without a feature declaration (`inv { fuelLeve
 
 | # | Summary | Rules | Applied |
 |---|---------|-------|---------|
-| 11 | Merge `qualifiedName \| ownedFeatureChain` alternatives | generalType, specificType, unioning, intersecting, differencing, ownedFeatureInverting, ownedConjugation, ownedDisjoining, instantiatedTypeMember | Yes |
-| 12 | Simplify `flowEnd` after feature chain merge | flowEnd | No |
+| 11 | Merge `qualifiedName \| ownedFeatureChain` alternatives | specificType, generalType, conjugation, ownedConjugation, disjoining, ownedDisjoining, unioning, intersecting, differencing, chainingPart, featureInverting, ownedFeatureInverting | Yes |
 | 22 | Merge expression alternatives in `baseExpression` | baseExpression | Yes |
 
 ### Fix 11: Merge `qualifiedName | ownedFeatureChain` alternatives
 
 ANTLR4's SLL prediction mode can't distinguish `qualifiedName` from `ownedFeatureChain` because they share the same prefix. Merged ~15 rules with `qualifiedName | ownedFeatureChain` patterns into `qualifiedName ( DOT qualifiedName )*`. Patterns A–H cover named rules, inline alternatives, and `featureChain` variants.
 
-**Affected rules**: generalType, specificType, unioning, intersecting, differencing, ownedFeatureInverting, ownedConjugation, ownedDisjoining, instantiatedTypeMember
-
-### Fix 12: Simplify `flowEnd` after feature chain merge
-
-`ownedReferenceSubsetting` now consumes dots greedily (Fix 11), so the explicit `DOT` in `flowEnd` is never reached. Simplified to `qualifiedName ( DOT qualifiedName )*`.
-
-**Affected rules**: flowEnd
+**Affected rules**: specificType, generalType, conjugation, ownedConjugation, disjoining, ownedDisjoining, unioning, intersecting, differencing, chainingPart, featureInverting, ownedFeatureInverting
 
 ### Fix 22: Merge expression alternatives in `baseExpression`
 
@@ -74,12 +67,11 @@ Merged `featureReferenceExpression`, `metadataAccessExpression`, and `invocation
 | # | Summary | Rules | Applied |
 |---|---------|-------|---------|
 | 13 | Rewrite `identification` to prevent empty match | identification | Yes |
-| 14 | Optional `identification` in annotation rules | commentAnnotation, documentation, textualRepresentation | Yes |
+| 14 | Optional `identification` in annotation rules | comment, documentation, textualRepresentation | Yes |
 | 16 | Optional `identification` in namespace/type/classifier declarations | namespaceDeclaration, typeDeclaration, classifierDeclaration | Yes |
-| 17 | Optional `identification` in relationship declarations | subtypeDeclaration, conjugationDeclaration, disjoiningDeclaration, subclassificationDeclaration, featureTypingDeclaration, subsettingDeclaration, redefinitionDeclaration, featuringDeclaration | Yes |
-| 18 | Optional `identification` in definitions, packages, and other declarations | definitionDeclaration, packageDeclaration, multiplicitySubset, multiplicityRange, dependencyDeclaration, metadataFeatureDeclaration, metadataUsageDeclaration | Yes |
-| 24 | Optional `usageDeclaration` in `ownedCrossFeature` | ownedCrossFeature | No |
-| 35 | Optional `usageDeclaration` in `flowDeclaration`; remove redundant alternative | flowDeclaration | No |
+| 17 | Optional `identification` in relationship declarations | specialization, conjugation, disjoining, subclassification, featureTyping, subsetting, redefinition, typeFeaturing | Yes |
+| 18 | Optional `identification` in definitions, packages, and other declarations | multiplicitySubset, multiplicityRange, metadataFeatureDeclaration, packageDeclaration | Yes |
+| 58 | Optional `identification` in `payloadFeature` | payloadFeature | Yes |
 
 ### Fix 13: Rewrite `identification` to prevent empty match
 
@@ -91,7 +83,7 @@ The generator produces `( LT name GT )? ( name )?` which can match the empty str
 
 `Comment`, `Documentation` and `TextualRepresentation` have an `Identification` that may be empty (KerML 8.2.3.3.2, 8.2.3.1). With Fix 13 requiring a name or short name in `identification`, made it optional in comment, doc, and rep declarations.
 
-**Affected rules**: commentAnnotation, documentation, textualRepresentation
+**Affected rules**: comment, documentation, textualRepresentation
 
 ### Fix 16: Optional `identification` in namespace/type/classifier declarations
 
@@ -103,39 +95,25 @@ A namespace, type or classifier may be anonymous: its `Identification` is empty 
 
 Made `identification` optional in specialization, conjugation, disjoining, subclassifier, typing, subset, redefinition, and featuring declarations.
 
-**Affected rules**: subtypeDeclaration, conjugationDeclaration, disjoiningDeclaration, subclassificationDeclaration, featureTypingDeclaration, subsettingDeclaration, redefinitionDeclaration, featuringDeclaration
+**Affected rules**: specialization, conjugation, disjoining, subclassification, featureTyping, subsetting, redefinition, typeFeaturing
 
 ### Fix 18: Optional `identification` in definitions, packages, and other declarations
 
 Made `identification` optional in `definitionDeclaration`, `packageDeclaration`, `multiplicitySubset`, `multiplicityRange`, `dependencyDeclaration`, `metadataFeatureDeclaration`, and `metadataUsageDeclaration`.
 
-**Affected rules**: definitionDeclaration, packageDeclaration, multiplicitySubset, multiplicityRange, dependencyDeclaration, metadataFeatureDeclaration, metadataUsageDeclaration
+**Affected rules**: multiplicitySubset, multiplicityRange, metadataFeatureDeclaration, packageDeclaration
 
-### Fix 24: Optional `usageDeclaration` in `ownedCrossFeature`
+### Fix 58: Optional `identification` in `payloadFeature`
 
-Made `usageDeclaration` optional in the `basicUsagePrefix` alternative.
+A flow's payload may be anonymous: the `Identification` of `PayloadFeature` may be empty (KerML 8.2.5.9.2, 8.2.3.1), as in `flow f of : C;`. With Fix 13 requiring a name or short name in `identification`, made it optional in the two alternatives that start with it. SysML's own `PayloadFeature` production already has an optional `Identification` (SysML 8.2.2.16), so the SysML grammar is unchanged.
 
-**Affected rules**: ownedCrossFeature
-
-### Fix 35: Optional `usageDeclaration` in `flowDeclaration`; remove redundant alternative
-
-Made `usageDeclaration` optional and removed the redundant `flowEndMember TO flowEndMember` alternative (already covered by the preceding alternative with optional parts).
-
-**Affected rules**: flowDeclaration
+**Affected rules**: payloadFeature
 
 ## Structural optimization
 
 | # | Summary | Rules | Applied |
 |---|---------|-------|---------|
-| 19 | Simplify `packageBody` alternatives | packageBody | No |
 | 20 | Restructure `multiplicityPart` ordering keywords | multiplicityPart | Yes |
-| 21 | Collapse redundant `resultExpressionMember` alternatives | resultExpressionMember | No |
-
-### Fix 19: Simplify `packageBody` alternatives
-
-Removed the `namespaceBodyElement | elementFilterMember` alternative. The extension uses only `packageBodyElement*` for package bodies.
-
-**Affected rules**: packageBody
 
 ### Fix 20: Restructure `multiplicityPart` ordering keywords
 
@@ -143,37 +121,31 @@ Made the ordering keywords (`ORDERED`, `NONUNIQUE`) combinable with `ownedMultip
 
 **Affected rules**: multiplicityPart
 
-### Fix 21: Collapse redundant `resultExpressionMember` alternatives
-
-The generator produces two alternatives where the second (`memberPrefix?`) subsumes the first (`memberPrefix`). Collapsed to a single alternative.
-
-**Affected rules**: resultExpressionMember
-
 ## Target compatibility
 
 | # | Summary | Rules | Applied |
 |---|---------|-------|---------|
-| 39 | Rename `empty*` rules for Go target compatibility | emptyFeature_, emptyMultiplicity_, emptyUsage_, emptyActionUsage_ | Yes |
+| 39 | Rename `empty*` rules for Go target compatibility | (only rules a later patch removes) | Yes |
 
 ### Fix 39: Rename `empty*` rules for Go target compatibility
 
 The Go ANTLR runtime generates exported methods from rule names. Rules named `empty*` collide with Go identifiers. Appended `_` to: `emptyFeature` → `emptyFeature_`, `emptyMultiplicity` → `emptyMultiplicity_`, `emptyUsage` → `emptyUsage_`, `emptyActionUsage` → `emptyActionUsage_`.
 
-**Affected rules**: emptyFeature_, emptyMultiplicity_, emptyUsage_, emptyActionUsage_
+**Affected rules**: (only rules a later patch removes)
 
 ## Conformance fix
 
 | # | Summary | Rules | Applied |
 |---|---------|-------|---------|
-| 42 | Handle `//*..*/` block comments in `REGULAR_COMMENT` lexer rule | REGULAR_COMMENT (lexer rule, updated) | Yes |
+| 42 | Handle `//*..*/` block comments in `REGULAR_COMMENT` lexer rule | REGULAR_COMMENT (lexer rule) | Yes |
 | 50 | Allow `REGULAR_COMMENT` as a no-op expression in `baseExpression` | baseExpression | Yes |
 | 57 | `rootNamespace` is the whole text (`EOF`) | rootNamespace | Yes |
 
 ### Fix 42: Handle `//*..*/` block comments in `REGULAR_COMMENT` lexer rule
 
-Official OMG SysML v2 training/validation files use `//* ... */` to comment out code blocks. Changed `REGULAR_COMMENT` to `'//'? '/*' .*? '*/'` so it also matches the `//` prefix form. ANTLR longest-match ensures `REGULAR_COMMENT` wins over `SINGLE_LINE_NOTE` for single-line `//* ... */`.
+Official OMG SysML v2 training/validation files use `//* ... */` to comment out code blocks. `REGULAR_COMMENT` is `'/*' .*? '*/' | '//*' .*? '*/'`, so it also matches the `//*` form. ANTLR's longest match makes `REGULAR_COMMENT` win over `SINGLE_LINE_NOTE` for a `//* ... */`.
 
-**Affected rules**: REGULAR_COMMENT (lexer rule, updated)
+**Affected rules**: REGULAR_COMMENT (lexer rule)
 
 ### Fix 50: Allow `REGULAR_COMMENT` as a no-op expression in `baseExpression`
 

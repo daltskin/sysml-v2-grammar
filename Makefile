@@ -54,8 +54,10 @@ sdk-archive: $(ANTLR_JAR) ## Generate all ANTLR4 SDKs and package a release zip
 test: $(ANTLR_JAR) ## Validate grammar, parse examples, run conformance
 	bash scripts/UpstreamReleaseTest.sh
 	$(PYTHON) scripts/ConformanceFetchTest.py
+	$(PYTHON) scripts/ConformanceRunnerTest.py
 	$(PYTHON) scripts/ExampleRunnerTest.py
-	$(PYTHON) scripts/PatchSelectionTest.py
+	$(PYTHON) scripts/PatchTest.py
+	$(PYTHON) scripts/SdkGenerationTest.py
 	@echo "── Compiling grammar (Java target) ──"
 	@mkdir -p $(BUILD_DIR)/antlr-out
 	java -jar $(ANTLR_JAR) -Dlanguage=Java -o $(BUILD_DIR)/antlr-out \
@@ -86,6 +88,11 @@ test: $(ANTLR_JAR) ## Validate grammar, parse examples, run conformance
 		-lib $(BUILD_DIR)/antlr-python-kerml/grammar grammar/KerMLLexer.g4 grammar/KerMLParser.g4
 	PYTHONPATH="$(CURDIR)/$(BUILD_DIR)/antlr-python-kerml" $(PYTHON) scripts/KerMLGrammarTest.py
 	@echo ""
+	@echo "── Running lexical structure regressions, both grammars (Python target) ──"
+	SYSML_PYTHON_DIR="$(CURDIR)/$(BUILD_DIR)/antlr-python/grammar" \
+		KERML_PYTHON_DIR="$(CURDIR)/$(BUILD_DIR)/antlr-python-kerml/grammar" \
+		$(PYTHON) scripts/LexicalStructureTest.py
+	@echo ""
 	@echo "── Parsing example files (Java target) ──"
 	@mkdir -p $(BUILD_DIR)/antlr-test
 	java -jar $(ANTLR_JAR) -Dlanguage=Java -o $(BUILD_DIR)/antlr-test \
@@ -93,9 +100,12 @@ test: $(ANTLR_JAR) ## Validate grammar, parse examples, run conformance
 	cd $(BUILD_DIR)/antlr-test/grammar && javac -cp "$(CURDIR)/$(ANTLR_JAR):." *.java
 	$(MAKE) test-examples
 	@echo ""
-	@if [ -d test/fixtures/conformance/training ]; then \
+	@if [ -d test/fixtures/conformance/training ] && [ -d test/fixtures/kerml-conformance/examples ]; then \
 		echo "── Running conformance tests ──"; \
 		$(PYTHON) scripts/conformance.py --verbose; \
+	elif [ -d test/fixtures/conformance/training ] || [ -d test/fixtures/kerml-conformance/examples ]; then \
+		echo "❌ Only one language's conformance fixtures found (run 'make update-conformance' to fetch both)"; \
+		exit 1; \
 	else \
 		echo "── Conformance fixtures not found (run 'make update-conformance' to fetch) ──"; \
 	fi

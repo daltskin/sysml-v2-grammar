@@ -456,11 +456,27 @@ class GrammarLanguage:
     patch_doc_sections: List[str] = field(default_factory=list)
 
 
+def rule_bodies(grammar: str) -> Dict[str, str]:
+    """The parser rules of `grammar`, by name in grammar order, each with its body text."""
+    return {
+        match.group(1): match.group(2)
+        for match in re.finditer(
+            r"^([a-z]\w*)\n    :(.*?)\n    ;$", grammar, flags=re.DOTALL | re.MULTILINE
+        )
+    }
+
+
+def rule_references(body: str) -> Set[str]:
+    """The rule names a rule body refers to, leaving out the words of its comments."""
+    body = re.sub(r"/\*.*?\*/", " ", body, flags=re.DOTALL)
+    body = re.sub(r"//[^\n]*", " ", body)
+    body = re.sub(r"'(?:\\.|[^'\\])*'", " ", body)
+    return set(re.findall(r"\b([a-z]\w*)\b", body))
+
+
 def unreachable_rules(grammar: str) -> List[str]:
     """The parser rules of `grammar` not reachable from `rootNamespace`, in grammar order."""
-    bodies: Dict[str, str] = {}
-    for match in re.finditer(r"\n([a-z]\w*)\n    :(.*?);\n", grammar, flags=re.DOTALL):
-        bodies[match.group(1)] = match.group(2)
+    bodies = rule_bodies(grammar)
     reachable: Set[str] = set()
     queue = ["rootNamespace"]
     while queue:
@@ -468,10 +484,14 @@ def unreachable_rules(grammar: str) -> List[str]:
         if name in reachable or name not in bodies:
             continue
         reachable.add(name)
-        queue.extend(
-            ref for ref in re.findall(r"\b([a-z]\w*)\b", bodies[name]) if ref in bodies
-        )
+        queue.extend(ref for ref in rule_references(bodies[name]) if ref in bodies)
     return [name for name in bodies if name not in reachable]
+
+
+def changed_rules(before: str, after: str) -> List[str]:
+    """The parser rules of `after` that a change from `before` added or rewrote, in grammar order."""
+    old, new = rule_bodies(before), rule_bodies(after)
+    return [name for name, body in new.items() if old.get(name) != body]
 
 
 def select_patches(patch_file: Dict[str, dict], keys: List[str]) -> List[dict]:
@@ -506,24 +526,27 @@ def apply_patch(grammar: str, fix: dict) -> Tuple[str, Dict[str, object]]:
     the number of rules removed.
     """
     prev = grammar
-    changed_rules: List[str] = []
     for item in fix.get("replace", []):
-        if "expect_once" in fix and grammar.count(item["old"]) != 1:
+        if item.get("regex"):
+            matches = len(re.findall(item["old"], grammar))
+        else:
+            matches = grammar.count(item["old"])
+        if "expect_once" in fix and matches != 1:
             raise ValueError(fix["expect_once"])
-        before = grammar
         if item.get("regex"):
             grammar = re.sub(item["old"], item["new"], grammar)
         else:
             grammar = grammar.replace(item["old"], item["new"])
-        if "rule" in item and grammar != before:
-            changed_rules.append(item["rule"])
 
     removed: List[str] = []
     if fix.get("remove_unreachable_rules"):
         removed = unreachable_rules(grammar)
         for rule_name in removed:
             grammar = re.sub(
-                r"\n" + rule_name + r"\n    :.*?;\n", "\n", grammar, flags=re.DOTALL
+                r"\n" + rule_name + r"\n    :.*?\n    ;\n",
+                "\n",
+                grammar,
+                flags=re.DOTALL,
             )
         # Collapse runs of 3+ blank lines left by removals
         grammar = re.sub(r"\n{3,}", "\n\n", grammar)
@@ -531,10 +554,11 @@ def apply_patch(grammar: str, fix: dict) -> Tuple[str, Dict[str, object]]:
     def text(key: str) -> str:
         return str(fix.get(key, "")).replace("{count}", str(len(removed)))
 
-    if any("rule" in item for item in fix.get("replace", [])):
-        # The rules whose replacement applied.
-        rules = ", ".join(changed_rules) if changed_rules else text("rules")
-        applied = bool(changed_rules)
+    if fix.get("replace"):
+        # The rules of this grammar the replacements changed: none if skipped.
+        changed = changed_rules(prev, grammar)
+        rules = ", ".join(changed)
+        applied = grammar != prev
     else:
         rules = text("rules")
         applied = fix.get("applied", grammar != prev)
@@ -896,6 +920,21 @@ class Antlr4Transformer:
         for fix in self.language.patches:
             grammar, applied = apply_patch(grammar, fix)
             self.applied_patches.append(applied)
+        # A stub header whose stubs a patch removed is left with no rules.
+        grammar = re.sub(
+            r"\n// ===== Stub rules for undefined references =====\n(?://[^\n]*\n)*\s*\Z",
+            "\n",
+            grammar,
+        )
+        # Name only the rules of the final grammar: a later patch may remove a rule.
+        final = rule_bodies(grammar)
+        for applied, fix in zip(self.applied_patches, self.language.patches):
+            if fix.get("replace"):
+                names = str(applied["rules"]).split(", ")
+                kept = ", ".join(n for n in names if n in final)
+                if applied["applied"] and not kept:
+                    kept = "(only rules a later patch removes)"
+                applied["rules"] = kept
         return grammar
 
     def generate_patches_md(self, release_tag: str, grammar_version: str) -> str:
@@ -1935,8 +1974,7 @@ def generate_kerml(
 ) -> None:
     """Generate the KerML grammar from the KerML KEBNF alone."""
     kerml = config["kerml"]
-    # The KerML grammar may be pinned to another release of the same repository.
-    tag = kerml.get("release_tag", config["release_tag"])
+    tag = config["release_tag"]
     print(f"KerML grammar (release tag {tag})")
     print()
 
@@ -1963,7 +2001,7 @@ def generate_kerml(
         kerml["output"],
         output_dir,
         tag,
-        kerml.get("grammar_version", config["grammar_version"]),
+        config["grammar_version"],
     )
 
 
@@ -1999,15 +2037,14 @@ def main():
         config["release_tag"] = args.tag
 
     # Validate release tags to prevent path traversal and URL injection
-    tags = [config["release_tag"], config.get("kerml", {}).get("release_tag", "")]
-    for tag in filter(None, tags):
-        if not re.match(r"^[a-zA-Z0-9._-]+$", tag):
-            print(f"Error: invalid release tag: {tag!r}", file=sys.stderr)
-            print(
-                "Tags must contain only alphanumeric characters, dots, hyphens, and underscores.",
-                file=sys.stderr,
-            )
-            sys.exit(1)
+    tag = config["release_tag"]
+    if not re.match(r"^[a-zA-Z0-9._-]+$", tag):
+        print(f"Error: invalid release tag: {tag!r}", file=sys.stderr)
+        print(
+            "Tags must contain only alphanumeric characters, dots, hyphens, and underscores.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
     # Determine paths – config.json lives at scripts/config.json,
     # so project_root is one level up from scripts/.

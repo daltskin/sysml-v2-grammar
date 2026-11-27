@@ -119,12 +119,14 @@ def count_generated_files(path: Path) -> int:
 def generate_language(
     language: str, output_root: Path, files: dict[str, list[str]]
 ) -> tuple[int, str, str, int]:
-    """Generate one target-language SDK, each grammar in its own folder."""
-    language_dir = output_root / language
+    """Generate one target-language SDK, each grammar in its own folder, named after it."""
+    # ANTLR runs from grammar/, so a relative output root is resolved first.
+    language_dir = output_root.resolve() / language
     ensure_clean_dir(language_dir)
 
     stdout, stderr = "", ""
     for grammar, grammar_files_ in files.items():
+        # Some targets (Go, PHP) allow only one grammar's files in a folder.
         output_dir = language_dir / grammar
         output_dir.mkdir()
         # Run from grammar/ so ANTLR writes files directly into the target directory
@@ -260,19 +262,12 @@ def write_manifest(
         "grammar_version": config["grammar_version"],
         "release_tag": config["release_tag"],
         "languages": languages,
-        # Each grammar's files and the OMG release it is generated from.
+        # Each grammar's lexer and parser, and the folder under each language's that holds them.
         "grammars": {
             grammar: {
-                # The folder, under each language's, that holds this grammar.
                 "directory": grammar,
                 "lexer": config[grammar]["options"]["lexer_name"],
                 "parser": config[grammar]["options"]["grammar_name"],
-                "release_tag": config[grammar].get(
-                    "release_tag", config["release_tag"]
-                ),
-                "grammar_version": config[grammar].get(
-                    "grammar_version", config["grammar_version"]
-                ),
             }
             for grammar in grammars
         },

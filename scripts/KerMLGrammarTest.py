@@ -6,6 +6,9 @@ it against the KerML specification:
 
   KerML 8.2.2.6 Reserved Words: the words KerML reserves are not names; a word
   only SysML reserves (SysML 8.2.2.1.2) is a name in KerML.
+  KerML 8.2.3.1: an Identification may be empty, wherever a production uses it
+  (Fix 13 and the fixes that make its callers' identification optional).
+  KerML 7.4.14: a library package need not be `standard` (Fix 4).
   KerML 7.4.8.5: an invariant may be declared without a feature declaration
   (`inv { ... }`, `inv false { ... }`).
   KerML 8.2.3.4.1 (Note 1): a text is parsed from `RootNamespace` as a whole,
@@ -47,9 +50,9 @@ CACHE_DIR = ROOT / ".grammar-cache"
 
 
 def kebnf(bnf_key: str) -> str:
-    """The text of a configured KEBNF file, of its language's release."""
+    """The text of a configured KEBNF file, of the configured release."""
     config = json.loads((ROOT / "scripts" / "config.json").read_text())
-    tag = config.get(bnf_key, {}).get("release_tag", config["release_tag"])
+    tag = config["release_tag"]
     path = config["bnf_files"][bnf_key]
     return download_kebnf(config["release_repo"], tag, bnf_key, path, str(CACHE_DIR))
 
@@ -100,9 +103,12 @@ class KerMLGrammarTest(unittest.TestCase):
         # A word KerML's productions use as a keyword is a token, though KerML
         # 8.2.2.6 may not list it: `new` (7.4.9.3 "the keyword new").
         cls.kerml_names = cls.sysml_keywords - cls.kerml_keywords - keywords_used(kerml)
-        # The KEBNF lists must be found and differ, or the tests below test nothing.
-        assert len(cls.kerml_keywords) > 50, cls.kerml_keywords
-        assert cls.kerml_names, "no word only SysML reserves"
+        # The KEBNF lists must be found and differ, or the tests below test nothing
+        # (an explicit raise, which `python -O` does not strip as it does `assert`).
+        if len(cls.kerml_keywords) <= 50:
+            raise AssertionError(f"too few KerML keywords: {cls.kerml_keywords}")
+        if not cls.kerml_names:
+            raise AssertionError("no word only SysML reserves")
 
     def test_word_only_sysml_reserves_is_a_kerml_name(self) -> None:
         for word in sorted(self.kerml_names):
@@ -187,6 +193,108 @@ class KerMLGrammarTest(unittest.TestCase):
             "classifier C; 1 + 2",
             "}",
         ):
+            with self.subTest(text=text):
+                self.assertNotEqual(parse(text), [])
+
+    def test_identification(self) -> None:
+        # Every production with an Identification (KerML 8.2.3.1), with it empty,
+        # a short name only, a name only, or both. `{id}` is the identification.
+        declarations = (
+            "namespace {id};",  # 8.2.3.4.1
+            "package {id};",  # 8.2.5.13
+            "library package {id};",
+            "standard library package {id};",
+            "comment {id}/* c */",  # 8.2.3.3.1
+            "comment {id}about A /* c */",
+            "classifier C {{ doc {id}/* d */ }}",
+            'rep {id}language "x" /* t */',
+            "dependency {id}from A to B;",  # 8.2.3.3? KerML Dependency
+            "type {id}:> A;",  # 8.2.4.1
+            "type {id}~ A;",
+            "type {id}[1] :> A;",
+            "classifier {id}:> A;",  # 8.2.4.2
+            "class {id}:> A;",
+            "struct {id}:> A;",
+            "datatype {id}:> A;",
+            "assoc {id}:> A;",
+            "behavior {id}:> A;",
+            "function {id}:> A;",
+            "predicate {id}:> A;",
+            "interaction {id}:> A;",
+            "metaclass {id}:> A;",
+            "specialization {id}subtype A :> B;",  # 8.2.4.1.2
+            "conjugation {id}conjugate A ~ B;",
+            "disjoining {id}disjoint A from B;",
+            "specialization {id}subclassifier A :> B;",
+            "specialization {id}typing f : A;",
+            "specialization {id}subset f :> g;",
+            "specialization {id}redefinition f :>> g;",
+            "inverting {id}inverse f of g;",
+            "featuring {id}of f by A;",
+            "multiplicity {id}[1];",  # 8.2.5.11
+            "multiplicity {id}subsets m;",
+            "metadata {id}: M;",  # 8.2.5.12
+            "@{id}: M;",
+        )
+        context = (
+            "package P {{ classifier A; classifier B; feature f; feature g; "
+            "multiplicity m [1]; metaclass M; {declaration} }}"
+        )
+        for declaration in declarations:
+            for identification in ("", "<s> ", "n ", "<s> n ", "'a b' "):
+                text = context.format(declaration=declaration.format(id=identification))
+                with self.subTest(text=text):
+                    self.assertEqual(parse(text), [])
+            # An identification is a short name and a name, no more, nothing else.
+            for identification in ("<> ", "n m ", "<s> <t> ", "<s> n m "):
+                text = context.format(declaration=declaration.format(id=identification))
+                with self.subTest(text=text):
+                    self.assertNotEqual(parse(text), [])
+
+    def test_flow_payload(self) -> None:
+        # Every PayloadFeature alternative (KerML 8.2.5.9.2), with an Identification
+        # that is empty, a short name, a name, or both (KerML 8.2.3.1) (Fix 58).
+        payloads = [
+            f"{identification}{rest}"
+            for identification in ("", "p ", "<s> ", "<s> p ")
+            for rest in (
+                ": C",
+                ":> a",
+                ":>> a",
+                "::> a",
+                "[1] : C",
+                "ordered : C",
+                ": C [0..*] ordered :> a",
+                ": C = 1",
+                "= 1",
+                ":= 1",
+                "default = 1",
+            )
+        ] + ["C", "C [1]", "[1] C"]
+        for keyword in ("flow", "succession flow"):
+            for payload in payloads:
+                for ends in ("", " from a.x to b.y"):
+                    text = (
+                        f"package P {{ class C; feature a; feature b; "
+                        f"{keyword} f of {payload}{ends}; }}"
+                    )
+                    with self.subTest(text=text):
+                        self.assertEqual(parse(text), [])
+        # A payload is never empty, nor a multiplicity alone, nor an
+        # identification without a specialization part or value part.
+        for payload in (
+            "",
+            ":",
+            "=",
+            "[1]",
+            "ordered",
+            "<s>",
+            "<> : C",
+            "p q : C",
+            ": C :",
+            ": C = ",
+        ):
+            text = f"package P {{ class C; flow f of {payload}; }}"
             with self.subTest(text=text):
                 self.assertNotEqual(parse(text), [])
 

@@ -15,12 +15,14 @@ Usage:
 Requires:
     - Java 17+ on PATH
     - ANTLR4 JAR at .build/antlr4.jar (run `make download-antlr`)
-    - Compiled grammars at .build/antlr-test/ and .build/antlr-test-kerml/ (built automatically)
+    - Compiled grammars at .build/antlr-test/ and .build/antlr-test-kerml/ (built automatically,
+      and rebuilt when a grammar file changes)
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import shutil
@@ -29,22 +31,29 @@ import sys
 import tarfile
 import tempfile
 import urllib.request
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Iterator
 
 ROOT = Path(__file__).resolve().parent.parent
 BUILD_DIR = ROOT / ".build"
 ANTLR_JAR = BUILD_DIR / "antlr4.jar"
 CONFIG_PATH = ROOT / "scripts" / "config.json"
 
+# The runner's own compile directories: nothing else writes to them, so a
+# directory's grammar stamp always describes the classes in it.
+CONFORMANCE_BUILD_DIR = BUILD_DIR / "conformance"
+
 # SysML: the compiled grammar and the fixtures fetched from the configured release.
-SYSML_GRAMMAR_CLASS_DIR = BUILD_DIR / "antlr-test" / "grammar"
+SYSML_COMPILE_DIR = CONFORMANCE_BUILD_DIR / "sysml"
+SYSML_GRAMMAR_CLASS_DIR = SYSML_COMPILE_DIR / "grammar"
 SYSML_FIXTURES_DIR = ROOT / "test" / "fixtures" / "conformance"
 # Standard library is fetched alongside the SysML conformance fixtures (not committed).
 SYSML_LIBRARY_DIR = ROOT / "sysml.library"
 
 # KerML: the compiled grammar and the fixtures fetched from KerML's configured release.
-KERML_COMPILE_DIR = BUILD_DIR / "antlr-test-kerml"
+KERML_COMPILE_DIR = CONFORMANCE_BUILD_DIR / "kerml"
 KERML_GRAMMAR_CLASS_DIR = KERML_COMPILE_DIR / "grammar"
 KERML_FIXTURES_DIR = ROOT / "test" / "fixtures" / "kerml-conformance"
 # Release directory -> fixture directory, all of them KerML.
@@ -120,103 +129,100 @@ def find_files(directory: Path, extensions: list[str]) -> list[Path]:
     return sorted(results)
 
 
-def ensure_sysml_grammar_compiled() -> None:
-    """SysML-specific: compile the SysML grammar with ANTLR4 Java target if not already done."""
+# Written next to a compiled grammar: the digest of the grammar files it was compiled from.
+GRAMMAR_STAMP = "grammar.sha256"
+
+
+def grammar_digest(grammars: list[Path]) -> str:
+    """The SHA-256 of the contents of `grammars`, in order, to tell a current compiled grammar from a stale one."""
+    digest = hashlib.sha256()
+    for grammar in grammars:
+        digest.update(grammar.name.encode() + b"\0" + grammar.read_bytes() + b"\0")
+    return digest.hexdigest()
+
+
+def run_compiler(tool: str, command: list[str], cwd: Path) -> None:
+    """Run one compilation step; on failure, print the tool's own messages and exit."""
+    result = subprocess.run(command, cwd=str(cwd), capture_output=True, text=True)
+    if result.returncode != 0:
+        print(f"❌ {tool} failed (exit {result.returncode}):", file=sys.stderr)
+        for output in (result.stdout, result.stderr):
+            if output.strip():
+                print(output.strip(), file=sys.stderr)
+        sys.exit(1)
+
+
+def ensure_grammar_compiled(compile_dir: Path, lexer: str, parser: str) -> None:
+    """Compile a grammar with the ANTLR4 Java target into `compile_dir`/grammar, unless already compiled from the same grammar files.
+
+    The lexer and parser paths are relative to ROOT. A changed grammar file, or a
+    compiled grammar without the stamp of its grammar files, is compiled anew.
+    """
     if not ANTLR_JAR.exists():
         print(
             "❌ ANTLR4 JAR not found. Run 'make download-antlr' first.", file=sys.stderr
         )
         sys.exit(1)
 
-    # Check if already compiled
-    if (SYSML_GRAMMAR_CLASS_DIR / "SysMLv2Parser.class").exists():
+    class_dir = compile_dir / "grammar"
+    stamp = class_dir / GRAMMAR_STAMP
+    digest = grammar_digest([ROOT / lexer, ROOT / parser])
+    if stamp.exists() and stamp.read_text() == digest:
         return
 
-    print("  Compiling grammar (Java target)...")
-    compile_dir = BUILD_DIR / "antlr-test"
-    compile_dir.mkdir(parents=True, exist_ok=True)
+    print(f"  Compiling {Path(parser).stem} (Java target)...")
+    # Start clean, so no class of a rule the grammar no longer has is left.
+    shutil.rmtree(class_dir, ignore_errors=True)
+    class_dir.mkdir(parents=True)
 
     # NOTE: ANTLR must be given *relative* grammar paths (with cwd=ROOT),
     # otherwise it writes the generated sources directly into compile_dir
-    # instead of compile_dir/grammar/, and the javac step below fails
-    # because its cwd (SYSML_GRAMMAR_CLASS_DIR) does not exist.
-    subprocess.run(
+    # instead of compile_dir/grammar/. The lexer's tokens file is written to
+    # class_dir and read from there (-lib).
+    run_compiler(
+        "ANTLR",
         [
             "java",
             "-jar",
-            ".build/antlr4.jar",
+            str(ANTLR_JAR),
             "-Dlanguage=Java",
             "-o",
             str(compile_dir),
-            "grammar/SysMLv2Lexer.g4",
-            "grammar/SysMLv2Parser.g4",
+            "-lib",
+            str(class_dir),
+            lexer,
+            parser,
         ],
-        cwd=str(ROOT),
-        check=True,
-        capture_output=True,
+        ROOT,
     )
 
     # NOTE: subprocess.run with a list does not perform shell glob
     # expansion, so "*.java" must be expanded in Python. Passing the
     # literal string makes javac fail with "invalid flag" / exit 2.
-    java_sources = sorted(p.name for p in SYSML_GRAMMAR_CLASS_DIR.glob("*.java"))
+    java_sources = sorted(p.name for p in class_dir.glob("*.java"))
     if not java_sources:
         print(
-            f"❌ ANTLR did not generate any Java sources in {SYSML_GRAMMAR_CLASS_DIR}.",
+            f"❌ ANTLR did not generate any Java sources in {class_dir}.",
             file=sys.stderr,
         )
         sys.exit(1)
 
-    subprocess.run(
-        ["javac", "-cp", f"{ANTLR_JAR}:.", *java_sources],
-        cwd=str(SYSML_GRAMMAR_CLASS_DIR),
-        check=True,
-        capture_output=True,
+    run_compiler("javac", ["javac", "-cp", f"{ANTLR_JAR}:.", *java_sources], class_dir)
+    # Only a completed compilation is stamped, so a failed one is retried.
+    stamp.write_text(digest)
+
+
+def ensure_sysml_grammar_compiled() -> None:
+    """SysML-specific: compile the SysML grammar, unless compiled from the current grammar files."""
+    ensure_grammar_compiled(
+        SYSML_COMPILE_DIR, "grammar/SysMLv2Lexer.g4", "grammar/SysMLv2Parser.g4"
     )
 
 
 def ensure_kerml_grammar_compiled() -> None:
-    """KerML-specific: compile the KerML grammar with the ANTLR4 Java target if not already done."""
-    if not ANTLR_JAR.exists():
-        print(
-            "❌ ANTLR4 JAR not found. Run 'make download-antlr' first.", file=sys.stderr
-        )
-        sys.exit(1)
-    if (KERML_GRAMMAR_CLASS_DIR / "KerMLParser.class").exists():
-        return
-
-    print("  Compiling KerML grammar (Java target)...")
-    # The lexer's tokens file is written to KERML_GRAMMAR_CLASS_DIR and read from there (-lib).
-    KERML_GRAMMAR_CLASS_DIR.mkdir(parents=True, exist_ok=True)
-    subprocess.run(
-        [
-            "java",
-            "-jar",
-            ".build/antlr4.jar",
-            "-Dlanguage=Java",
-            "-o",
-            str(KERML_COMPILE_DIR),
-            "-lib",
-            str(KERML_GRAMMAR_CLASS_DIR),
-            "grammar/KerMLLexer.g4",
-            "grammar/KerMLParser.g4",
-        ],
-        cwd=str(ROOT),
-        check=True,
-        capture_output=True,
-    )
-    java_sources = sorted(p.name for p in KERML_GRAMMAR_CLASS_DIR.glob("*.java"))
-    if not java_sources:
-        print(
-            f"❌ ANTLR did not generate any Java sources in {KERML_GRAMMAR_CLASS_DIR}.",
-            file=sys.stderr,
-        )
-        sys.exit(1)
-    subprocess.run(
-        ["javac", "-cp", f"{ANTLR_JAR}:.", *java_sources],
-        cwd=str(KERML_GRAMMAR_CLASS_DIR),
-        check=True,
-        capture_output=True,
+    """KerML-specific: compile the KerML grammar, unless compiled from the current grammar files."""
+    ensure_grammar_compiled(
+        KERML_COMPILE_DIR, "grammar/KerMLLexer.g4", "grammar/KerMLParser.g4"
     )
 
 
@@ -295,8 +301,9 @@ def run_suite(name: str, suite: dict, grammar: str, class_dir: Path) -> SuiteRes
     return SuiteResult(name=name, label=label, total=len(files), failures=failures)
 
 
-def fetch_sysml_fixtures() -> None:
-    """SysML-specific: download the SysML fixtures and the standard library from the configured release."""
+@contextmanager
+def release_source() -> Iterator[Path]:
+    """The source root of the configured release's archive, downloaded once and extracted into a temporary directory."""
     with open(CONFIG_PATH) as config_file:
         config = json.load(config_file)
     repo = config["release_repo"]
@@ -310,7 +317,7 @@ def fetch_sysml_fixtures() -> None:
         print(f"❌ Invalid release tag: {tag!r}", file=sys.stderr)
         sys.exit(1)
     archive_url = f"https://github.com/{repo}/archive/refs/tags/{tag}.tar.gz"
-    print(f"📥 Fetching conformance fixtures and standard library from {repo}@{tag}...")
+    print(f"📥 Fetching the release archive of {repo}@{tag}...")
 
     with tempfile.TemporaryDirectory() as tmpdir:
         archive_path = Path(tmpdir) / "release.tar.gz"
@@ -326,101 +333,94 @@ def fetch_sysml_fixtures() -> None:
         if len(roots) != 1 or not roots[0].is_dir():
             print(f"❌ Unexpected archive structure: {roots}", file=sys.stderr)
             sys.exit(1)
-        src_root = roots[0]
+        yield roots[0]
 
-        mapping = {
-            "sysml/src/training": "training",
-            "sysml/src/validation": "validation",
-            "sysml/src/examples": "examples",
-        }
-        library_subdirs = ("Domain Libraries", "Kernel Libraries", "Systems Library")
-        src_lib = src_root / "sysml.library"
 
-        # Validate every source before replacing the existing fixtures or library.
-        for src_rel in mapping:
-            if not find_files(src_root / src_rel, [".sysml"]):
-                print(f"❌ Missing or empty fixture suite: {src_rel}", file=sys.stderr)
-                sys.exit(1)
-        for sub in library_subdirs:
-            if not find_files(src_lib / sub, [".sysml", ".kerml"]):
-                print(
-                    f"❌ Missing or empty standard library directory: {sub}",
-                    file=sys.stderr,
-                )
-                sys.exit(1)
+def fetch_sysml_fixtures(src_root: Path | None = None) -> None:
+    """SysML-specific: copy the SysML fixtures and the standard library from the release source (downloaded if not given)."""
+    if src_root is None:
+        with release_source() as root:
+            fetch_sysml_fixtures(root)
+        return
 
-        if SYSML_FIXTURES_DIR.exists():
-            shutil.rmtree(SYSML_FIXTURES_DIR)
-        SYSML_FIXTURES_DIR.mkdir(parents=True, exist_ok=True)
-        for src_rel, dst_name in mapping.items():
-            dst = SYSML_FIXTURES_DIR / dst_name
-            shutil.copytree(src_root / src_rel, dst)
-            count = len(list(dst.rglob("*.sysml")))
-            print(f"  {dst_name}: {count} .sysml files")
+    print("  SysML conformance fixtures and standard library:")
+    mapping = {
+        "sysml/src/training": "training",
+        "sysml/src/validation": "validation",
+        "sysml/src/examples": "examples",
+    }
+    library_subdirs = ("Domain Libraries", "Kernel Libraries", "Systems Library")
+    src_lib = src_root / "sysml.library"
 
-        for sub in library_subdirs:
-            target = SYSML_LIBRARY_DIR / sub
-            if target.exists():
-                shutil.rmtree(target)
-        for item in src_lib.iterdir():
-            if item.is_dir():
-                dst = SYSML_LIBRARY_DIR / item.name
-                if dst.exists():
-                    shutil.rmtree(dst)
-                shutil.copytree(item, dst)
-        sysml_count = len(list(SYSML_LIBRARY_DIR.rglob("*.sysml")))
-        kerml_count = len(list(SYSML_LIBRARY_DIR.rglob("*.kerml")))
-        print(f"  Library: {sysml_count} .sysml, {kerml_count} .kerml files")
+    # Validate every source before replacing the existing fixtures or library.
+    for src_rel in mapping:
+        if not find_files(src_root / src_rel, [".sysml"]):
+            print(f"❌ Missing or empty fixture suite: {src_rel}", file=sys.stderr)
+            sys.exit(1)
+    for sub in library_subdirs:
+        if not find_files(src_lib / sub, [".sysml", ".kerml"]):
+            print(
+                f"❌ Missing or empty standard library directory: {sub}",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
+    if SYSML_FIXTURES_DIR.exists():
+        shutil.rmtree(SYSML_FIXTURES_DIR)
+    SYSML_FIXTURES_DIR.mkdir(parents=True, exist_ok=True)
+    for src_rel, dst_name in mapping.items():
+        dst = SYSML_FIXTURES_DIR / dst_name
+        shutil.copytree(src_root / src_rel, dst)
+        count = len(list(dst.rglob("*.sysml")))
+        print(f"  {dst_name}: {count} .sysml files")
+
+    for sub in library_subdirs:
+        target = SYSML_LIBRARY_DIR / sub
+        if target.exists():
+            shutil.rmtree(target)
+    for item in src_lib.iterdir():
+        if item.is_dir():
+            dst = SYSML_LIBRARY_DIR / item.name
+            if dst.exists():
+                shutil.rmtree(dst)
+            shutil.copytree(item, dst)
+    sysml_count = len(list(SYSML_LIBRARY_DIR.rglob("*.sysml")))
+    kerml_count = len(list(SYSML_LIBRARY_DIR.rglob("*.kerml")))
+    print(f"  Library: {sysml_count} .sysml, {kerml_count} .kerml files")
 
     print("\n✅ Conformance fixtures updated")
 
 
-def fetch_kerml_fixtures() -> None:
-    """KerML-specific: download the KerML examples and Kernel Libraries of KerML's configured release."""
-    with open(CONFIG_PATH) as config_file:
-        config = json.load(config_file)
-    repo = config["release_repo"]
-    # The KerML grammar may be pinned to another release of the same repository.
-    tag = config.get("kerml", {}).get("release_tag", config["release_tag"])
-    if not isinstance(repo, str) or not re.fullmatch(
-        r"[a-zA-Z0-9._-]+/[a-zA-Z0-9._-]+", repo
-    ):
-        print(f"❌ Invalid release repository: {repo!r}", file=sys.stderr)
-        sys.exit(1)
-    if not isinstance(tag, str) or not re.fullmatch(r"[a-zA-Z0-9._-]+", tag):
-        print(f"❌ Invalid release tag: {tag!r}", file=sys.stderr)
-        sys.exit(1)
-    archive_url = f"https://github.com/{repo}/archive/refs/tags/{tag}.tar.gz"
-    print(f"📥 Fetching KerML conformance fixtures from {repo}@{tag}...")
+def fetch_kerml_fixtures(src_root: Path | None = None) -> None:
+    """KerML-specific: copy the KerML examples and Kernel Libraries from the release source (downloaded if not given)."""
+    if src_root is None:
+        with release_source() as root:
+            fetch_kerml_fixtures(root)
+        return
 
-    with tempfile.TemporaryDirectory() as tmpdir:
-        archive_path = Path(tmpdir) / "release.tar.gz"
-        urllib.request.urlretrieve(archive_url, str(archive_path))
-        extract_dir = Path(tmpdir) / "extracted"
-        extract_dir.mkdir()
-        with tarfile.open(archive_path, "r:gz") as tar:
-            tar.extractall(path=str(extract_dir), filter="data")
-        roots = list(extract_dir.iterdir())
-        if len(roots) != 1 or not roots[0].is_dir():
-            print(f"❌ Unexpected archive structure: {roots}", file=sys.stderr)
+    print("  KerML conformance fixtures:")
+    # Validate every source before replacing the existing fixtures.
+    for src_rel in KERML_FETCHED:
+        if not find_files(src_root / src_rel, [".kerml"]):
+            print(
+                f"❌ Missing or empty KerML fixture directory: {src_rel}",
+                file=sys.stderr,
+            )
             sys.exit(1)
-        src_root = roots[0]
+    if KERML_FIXTURES_DIR.exists():
+        shutil.rmtree(KERML_FIXTURES_DIR)
+    KERML_FIXTURES_DIR.mkdir(parents=True)
+    for src_rel, dst_name in KERML_FETCHED.items():
+        dst = KERML_FIXTURES_DIR / dst_name
+        shutil.copytree(src_root / src_rel, dst)
+        print(f"  {dst_name}: {len(find_files(dst, ['.kerml']))} .kerml files")
 
-        # Validate every source before replacing the existing fixtures.
-        for src_rel in KERML_FETCHED:
-            if not find_files(src_root / src_rel, [".kerml"]):
-                print(
-                    f"❌ Missing or empty KerML fixture directory: {src_rel}",
-                    file=sys.stderr,
-                )
-                sys.exit(1)
-        if KERML_FIXTURES_DIR.exists():
-            shutil.rmtree(KERML_FIXTURES_DIR)
-        KERML_FIXTURES_DIR.mkdir(parents=True)
-        for src_rel, dst_name in KERML_FETCHED.items():
-            dst = KERML_FIXTURES_DIR / dst_name
-            shutil.copytree(src_root / src_rel, dst)
-            print(f"  {dst_name}: {len(find_files(dst, ['.kerml']))} .kerml files")
+
+def fetch_fixtures(languages: list[str]) -> None:
+    """Fetch the fixtures of `languages`, all from one download of the release archive."""
+    with release_source() as src_root:
+        for language in languages:
+            LANGUAGES[language]["fetch"](src_root)
 
 
 def _display_path(filepath: Path) -> str:
@@ -454,7 +454,7 @@ KERML_VALID_CONTROL = """package Control {
     class K :> C {
         feature x : C;
         feature y :> x.x;
-        inv { true }
+        inv i { true }
     }
 }
 """
@@ -584,9 +584,15 @@ def main() -> None:
     languages = [args.language] if args.language else list(SUITES.keys())
 
     if args.fetch:
-        for language in languages:
-            LANGUAGES[language]["fetch"]()
+        fetch_fixtures(languages)
         return
+
+    # A suite that none of the selected languages has would run nothing and pass.
+    if args.suite and not any(args.suite in SUITES[lang] for lang in languages):
+        parser.error(
+            f"suite {args.suite!r} does not exist for {' or '.join(languages)}; "
+            f"its suites are: {', '.join(sorted(n for lang in languages for n in SUITES[lang]))}"
+        )
 
     results: list[SuiteResult] = []
     for language in languages:
